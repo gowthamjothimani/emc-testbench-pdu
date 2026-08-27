@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMC PDU Testbench</title>
+    <style>
+        :root {
+            --bg-dark: #0b0f18;
+            --card-bg: #161d2b;
+            --border: #2d3b4d;
+            --text-main: #edf2ff;
+            --text-dim: #98a7bf;
+            --neon-green: #35c46b;
+            --neon-blue: #5aa5ff;
+            --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(180deg, #090d14 0%, #111827 100%);
+            color: var(--text-main);
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .form-container {
+            width: min(480px, 92vw);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(19, 26, 37, 0.96);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        }
+
+        .header-logo-section {
+            background: #ffffff;
+            padding: 22px 20px 18px;
+            text-align: center;
+            border-bottom: 4px solid var(--neon-blue);
+        }
+
+        .logo-placeholder {
+            width: 110px;
+            height: auto;
+            display: block;
+            margin: 0 auto 12px;
+        }
+
+        .app-name {
+            margin: 0;
+            color: #111827;
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+        }
+
+        .form-content {
+            padding: 26px 28px 30px;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: #0d141d;
+            color: var(--neon-green);
+            font-family: var(--font-mono);
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 0 3px rgba(90, 165, 255, 0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px 18px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(180deg, var(--neon-green) 0%, #1d9a54 100%);
+            color: #06130c;
+            font-weight: 800;
+            font-size: 0.95rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(53, 196, 107, 0.35);
+        }
+
+        button:hover {
+            filter: brightness(1.08);
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <div class="header-logo-section">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="EMC LOGO" class="logo-placeholder" onerror="this.style.display='none'">
+            <h2 class="app-name">EMC TEST BENCH APP</h2>
+        </div>
+
+        <div class="form-content">
+            <form method="POST" action="/submittestinfo">
+                <div class="input-group">
+                    <label for="testername">Tester ID</label>
+                    <input list="tester-names" type="text" id="testername" name="testername" required placeholder="Select operator">
+                    <datalist id="tester-names">
+                        <option value="Gowtham">
+                        <option value="Suraj">
+                        <option value="Nithyanandham">
+                        <option value="Sebastiaan">
+                        <option value="Michal">
+                    </datalist>
+                </div>
+
+                <div class="input-group">
+                    <label for="modelnumber">Hardware Model</label>
+                    <input list="model-numbers" type="text" id="modelnumber" name="modelnumber" required placeholder="Select model number">
+                    <datalist id="model-numbers">
+                        <option value="PDU-G1.0.0">
+                        <option value="PDU-G1.1.0">
+                        <option value="PDU-G2.0.0">
+                        <option value="PDU-G2.1.0">
+                    </datalist>
+                </div>
+
+                <div class="input-group">
+                    <label for="projectdetail">Project ID</label>
+                    <input list="project-details" type="text" id="projectdetail" name="projectdetail" required placeholder="Select project">
+                    <datalist id="project-details">
+                        <option value="PDU-Alpha">
+                        <option value="PDU-Beta">
+                        <option value="Test-DTAPIN">
+                        <option value="Project01">
+                    </datalist>
+                </div>
+
+                <div class="input-group">
+                    <label for="serialnumber">PCB Serial Number</label>
+                    <input type="text" id="serialnumber" name="serialnumber" required placeholder="Scan or type Serial No.">
+                </div>
+
+                <button type="submit">Initialize Test</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

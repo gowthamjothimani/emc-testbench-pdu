@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMC PDU Testbench Console</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header class="titlebar">
+        <div class="title-left">
+            <div class="title-led"></div>
+            <h1>EMC PDU TESTBENCH - TEST CONSOLE</h1>
+        </div>
+        <div class="title-actions">
+            <button class="mini-btn primary" onclick="openQCModal()">REPORT QC</button>
+            <button class="mini-btn" onclick="showBoardInfo()">BOARD INFO</button>
+            <button class="mini-btn" onclick="exportLog()">EXPORT LOG</button>
+        </div>
+    </header>
+
+    <div class="status-bar">
+        <div class="status-pill">CPU <span id="cpuValue">--</span>%</div>
+        <div class="status-pill">CAN <span id="canValue">DOWN</span></div>
+        <div class="status-pill">TEMP <span id="tempValue">--</span>°C</div>
+        <div class="status-pill">HUM <span id="humValue">--</span>%</div>
+        <div class="status-pill">EEPROM <span id="eepromValue">ERROR</span></div>
+        <div class="status-pill">MQTT <span id="mqttValue">DOWN</span></div>
+        <div class="status-pill status-time">TIME <span id="timestampValue">--</span></div>
+    </div>
+
+    <nav class="nav-bar">
+        <div class="nav-links">
+            <button class="tab-button active-tab" onclick="showTab('inspectionTab', this)">Inspection</button>
+            <button class="tab-button" onclick="showTab('chargerTab', this)">Charger</button>
+            <button class="tab-button" onclick="showTab('batteryTab', this)">Battery</button>
+            <button class="tab-button" onclick="showTab('dcOutTab', this)">DC Out</button>
+        </div>
+        <div class="nav-actions">
+            <button class="control-btn success" id="startTestBtn">Start Test</button>
+        </div>
+    </nav>
+
+    <main class="main-panel">
+        <section id="inspectionTab" class="tab active">
+            <div class="card">
+                <h3>Manual Inspection</h3>
+                <div class="question-block">
+                    <label>VISUAL: No physical damage to PCB?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="visual" value="yes"> Pass</label>
+                        <label><input type="radio" name="visual" value="no"> Fail</label>
+                    </div>
+                </div>
+                <div class="question-block">
+                    <label>ELECTRICAL: Basic voltage checks passed?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="electrical" value="yes"> Pass</label>
+                        <label><input type="radio" name="electrical" value="no"> Fail</label>
+                    </div>
+                </div>
+                <button class="control-btn success" onclick="saveInspection()">Save Inspection</button>
+            </div>
+        </section>
+
+        <section id="chargerTab" class="tab">
+            <div class="card wide">
+                <h3>Charger Interface</h3>
+                <div class="data-grid">
+                    <div class="metric"><span>VOUT</span><strong id="chargerVout">--</strong></div>
+                    <div class="metric"><span>IOUT</span><strong id="chargerIout">--</strong></div>
+                    <div class="metric"><span>TEMP</span><strong id="chargerTemp">--</strong></div>
+                    <div class="metric"><span>STATUS</span><strong id="chargerStatus">--</strong></div>
+                </div>
+                <div class="question-block">
+                    <label>Charger interface working?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="chargerStatusChoice" value="good"> Good</label>
+                        <label><input type="radio" name="chargerStatusChoice" value="error"> Error</label>
+                    </div>
+                </div>
+                <div class="message-box">
+                    <label>Message</label>
+                    <input id="chargerMessage" type="text" placeholder="No message / Error response">
+                </div>
+                <button class="control-btn success" onclick="saveChargerResult()">Save Charger Result</button>
+            </div>
+        </section>
+
+        <section id="batteryTab" class="tab">
+            <div class="card wide">
+                <h3>Battery Data</h3>
+                <div class="data-grid">
+                    <div class="metric"><span>BATTERY STATE</span><strong id="batteryStateValue">--</strong></div>
+                    <div class="metric"><span>CHARGER CONNECTED</span><strong id="chargerConnectedValue">--</strong></div>
+                    <div class="metric"><span>STATUS</span><strong id="batteryStatusValue">--</strong></div>
+                    <div class="metric"><span>POWER SOURCE</span><strong id="powerSourceValue">--</strong></div>
+                </div>
+
+                <div class="question-block">
+                    <label>Battery state</label>
+                    <select id="batteryStateSelect">
+                        <option value="">Select state</option>
+                        <option value="on">ON</option>
+                        <option value="charging">Charging</option>
+                        <option value="ready">Ready</option>
+                        <option value="off">OFF</option>
+                        <option value="discharging">Discharging</option>
+                    </select>
+                </div>
+
+                <div class="question-block">
+                    <label>Charger connected?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="chargerConnected" value="connected"> Connected</label>
+                        <label><input type="radio" name="chargerConnected" value="disconnected"> Disconnected</label>
+                    </div>
+                </div>
+
+                <div class="question-block">
+                    <label>Was power or charger turned off?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="powerOffConfirmed" value="yes"> Yes</label>
+                        <label><input type="radio" name="powerOffConfirmed" value="no"> No</label>
+                    </div>
+                </div>
+
+                <button class="control-btn success" onclick="saveBatteryResult()">Save Battery Result</button>
+            </div>
+        </section>
+
+        <section id="dcOutTab" class="tab">
+            <div class="card wide">
+                <h3>DC Output Test</h3>
+                <div class="dc-grid">
+                    <div class="port-card">
+                        <h4>Port 1</h4>
+                        <div class="radio-row">
+                            <label><input type="radio" name="port1" value="pass"> Pass</label>
+                            <label><input type="radio" name="port1" value="fail"> Fail</label>
+                        </div>
+                    </div>
+                    <div class="port-card">
+                        <h4>Port 2</h4>
+                        <div class="radio-row">
+                            <label><input type="radio" name="port2" value="pass"> Pass</label>
+                            <label><input type="radio" name="port2" value="fail"> Fail</label>
+                        </div>
+                    </div>
+                    <div class="port-card">
+                        <h4>Port 3</h4>
+                        <div class="radio-row">
+                            <label><input type="radio" name="port3" value="pass"> Pass</label>
+                            <label><input type="radio" name="port3" value="fail"> Fail</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="question-block">
+                    <label>Battery backup check: after AC/charger removed, battery started discharging?</label>
+                    <div class="radio-row">
+                        <label><input type="radio" name="batteryBackup" value="yes"> Yes</label>
+                        <label><input type="radio" name="batteryBackup" value="no"> No</label>
+                    </div>
+                </div>
+
+                <div class="message-box">
+                    <label>Notes</label>
+                    <input id="dcNotes" type="text" placeholder="Optional notes">
+                </div>
+
+                <button class="control-btn success" onclick="saveDcOutput()">Save DC Output Result</button>
+            </div>
+        </section>
+    </main>
+
+    <div id="qcModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">QC VALIDATION REPORT</div>
+            <div class="modal-body" id="qcResultsList"></div>
+            <div class="modal-actions">
+                <button class="mini-btn primary" onclick="confirmQC()">CONFIRM & WRITE EEPROM</button>
+                <button class="mini-btn" onclick="closeQCModal()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="deviceInfoModal" class="modal">
+        <div class="modal-content wide">
+            <div class="modal-header">BOARD EEPROM DATA</div>
+            <div class="modal-body scroll" id="deviceInfoData"></div>
+            <div class="modal-actions">
+                <button class="mini-btn" onclick="closeDeviceInfo()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
