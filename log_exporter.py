@@ -1,84 +1,111 @@
-from __future__ import annotations
+"""
+Central in-memory test-session log for the PDU testbench.
 
-from typing import Any, Dict, List
+Same role as the ACU testbench's LogExporter (single object accumulating
+results as the operator moves through tabs, then flattened to JSON for
+the QC report / EEPROM write / MQTT export) - schema changed to match
+the PDU's four tabs (Inspection, Charger, Battery, DC Out) instead of
+the ACU's gas/badge/alarm/indicator tabs.
+"""
+import time
 
 
 class LogExporter:
-    def __init__(self):
-        self.log: Dict[str, Any] = {
-            "tester-info": {"testername": "UNKNOWN", "serialnumber": "UNKNOWN", "modelnumber": "UNKNOWN", "projectdetail": "UNKNOWN"},
-            "system-check": {"cpu-usage": 0, "temperature": "--", "humidity": "--", "can-uplink": "DOWN", "eeprom-status": "ERROR", "mqtt-status": "DOWN"},
-            "board-inspection-status": {"visual": "not tested", "electrical": "not tested"},
-            "charger": {"vout": "--", "iout": "--", "temp": "--", "interface_status": "not tested", "message": "--"},
-            "battery": {"battery_state": "not tested", "charger_connected": "not tested", "status": "not tested", "power_source": "not tested", "power_off_confirmed": "not tested"},
-            "dc-output": {"port_1": "not tested", "port_2": "not tested", "port_3": "not tested", "battery_backup": "not tested", "notes": ""},
-            "qc-status": {"status": "NOT RUN", "fail_reasons": []},
+    def __init__(self, mqtt_client):
+        self.mqtt_client = mqtt_client
+
+        self.test_details = {}
+        self.env_data = {"cpu": None, "temperature": None, "humidity": None}
+
+        self.inspection = {"visual": "not tested", "electrical": "not tested"}
+
+        self.charger_status = {"data": {}, "working": None, "message": "not tested"}
+        self.battery_status = {"data": {}, "working": None, "message": "not tested"}
+
+        self.dc_out = {
+            "port1": "not tested",
+            "port2": "not tested",
+            "port3": "not tested",
+        }
+        self.backup_test = {
+            "requested": False,
+            "confirmed_off_by_operator": None,
+            "result": "not tested",
+            "observed_battery_state": None,
+            "observed_charger_connected": None,
         }
 
-    def set_test_details(self, **kwargs):
-        tester = self.log["tester-info"]
-        for key, value in kwargs.items():
-            if value is not None:
-                tester[key] = value
+        self.can_status = {"state": "UNKNOWN", "health": "ERROR", "detail": ""}
+        self.eeprom_status = {"present": None}
+        self.mqtt_status = {"connected": False, "reachable": None}
 
-    def set_environment_data(self, temp, hum, cpu):
-        self.log["system-check"]["temperature"] = temp
-        self.log["system-check"]["humidity"] = hum
-        self.log["system-check"]["cpu-usage"] = cpu
+        self.qc_status = "NOT_RUN"
+        self.qc_fail_reasons = []
 
-    def set_status_summary(self, can_uplink: str, eeprom_status: str, mqtt_status: str):
-        self.log["system-check"]["can-uplink"] = can_uplink
-        self.log["system-check"]["eeprom-status"] = eeprom_status
-        self.log["system-check"]["mqtt-status"] = mqtt_status
-
-    def set_inspection(self, payload):
-        self.log["board-inspection-status"] = {
-            "visual": payload.get("visual", "no"),
-            "electrical": payload.get("electrical", "no"),
+    # ---------------- setters ----------------
+    def set_test_details(self, testername, pcbserial, modelnumber=None, projectdetail=None):
+        self.test_details = {
+            "testername": testername,
+            "pcbserial": pcbserial,
+            "modelnumber": modelnumber,
+            "projectdetail": projectdetail,
         }
 
-    def set_charger(self, payload):
-        self.log["charger"] = {
-            "vout": payload.get("vout", "--"),
-            "iout": payload.get("iout", "--"),
-            "temp": payload.get("temp", "--"),
-            "interface_status": payload.get("interface_status", "not tested"),
-            "message": payload.get("message", "--"),
-        }
+    def set_environment_data(self, temperature, humidity, cpu):
+        self.env_data = {"temperature": temperature, "humidity": humidity, "cpu": cpu}
 
-    def set_battery(self, payload):
-        self.log["battery"] = {
-            "battery_state": payload.get("battery_state", "not tested"),
-            "charger_connected": payload.get("charger_connected", "not tested"),
-            "status": payload.get("status", "not tested"),
-            "power_source": payload.get("power_source", "not tested"),
-            "power_off_confirmed": payload.get("power_off_confirmed", "not tested"),
-        }
+    def set_inspection(self, visual, electrical):
+        self.inspection = {"visual": visual, "electrical": electrical}
 
-    def set_dc_output(self, payload):
-        self.log["dc-output"] = {
-            "port_1": payload.get("port_1", "not tested"),
-            "port_2": payload.get("port_2", "not tested"),
-            "port_3": payload.get("port_3", "not tested"),
-            "battery_backup": payload.get("battery_backup", "not tested"),
-            "notes": payload.get("notes", ""),
-        }
+    def set_charger_status(self, data, working, message):
+        self.charger_status = {"data": data, "working": working, "message": message}
 
-    def evaluate_qc(self) -> Dict[str, Any]:
-        failed: List[str] = []
-        ok_guidance = {
-            "visual": self.log["board-inspection-status"].get("visual") == "yes",
-            "electrical": self.log["board-inspection-status"].get("electrical") == "yes",
-            "charger": self.log["charger"].get("interface_status") == "good",
-            "battery": self.log["battery"].get("charger_connected") == "connected" and self.log["battery"].get("battery_state") in {"charging", "discharging"},
-            "dc-output": self.log["dc-output"].get("battery_backup") in {"pass", "yes"},
-        }
-        for key, is_ok in ok_guidance.items():
-            if not is_ok:
-                failed.append(f"{key} failed")
-        qc_status = "PASSED" if not failed else "FAILED"
-        self.log["qc-status"] = {"status": qc_status, "fail_reasons": failed}
-        return self.log["qc-status"]
+    def set_battery_status(self, data, working, message):
+        self.battery_status = {"data": data, "working": working, "message": message}
 
+    def set_dc_out_port(self, port_key, result):
+        if port_key in self.dc_out:
+            self.dc_out[port_key] = result
+
+    def set_backup_test(self, result_dict):
+        self.backup_test.update(result_dict)
+
+    def set_can_status(self, status_dict):
+        self.can_status = status_dict
+
+    def set_eeprom_status(self, present):
+        self.eeprom_status = {"present": present}
+
+    def set_mqtt_status(self, connected, reachable):
+        self.mqtt_status = {"connected": connected, "reachable": reachable}
+
+    def set_qc_status(self, status, reasons=None):
+        self.qc_status = status
+        self.qc_fail_reasons = reasons or []
+
+    # ---------------- readers ----------------
     def get_last_log(self):
-        return self.log
+        return {
+            "test_details": self.test_details,
+            "system-check": {
+                "cpu-usage": self.env_data["cpu"],
+                "temperature": self.env_data["temperature"],
+                "humidity": self.env_data["humidity"],
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            "inspection-status": self.inspection,
+            "charger-status": self.charger_status,
+            "battery-status": self.battery_status,
+            "dc-output-status": self.dc_out,
+            "battery-backup-status": self.backup_test,
+            "can-status": self.can_status,
+            "eeprom-status": self.eeprom_status,
+            "mqtt-status": self.mqtt_status,
+            "qc_status": self.qc_status,
+            "qc_fail_reasons": self.qc_fail_reasons,
+        }
+
+    def export_log(self):
+        data = self.get_last_log()
+        self.mqtt_client.publish_data(data)
+        return data

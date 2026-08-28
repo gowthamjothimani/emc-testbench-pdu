@@ -1,10 +1,10 @@
+import can
 import datetime
 import json
 import os
 import threading
 import struct
 import time
-import can
 from .qhb_address import QHB_ADDRESS_MAP
 
 class CAN_QHB:
@@ -84,24 +84,9 @@ class CAN_QHB:
     #  INIT DEVICE 
     def init_device(self):
         try:
-            if can is None:
-                raise ModuleNotFoundError("python-can is not installed")
-
-            bus_factory = getattr(can, "Bus", None)
-            if bus_factory is None:
-                interface_mod = getattr(can, "interface", None)
-                if interface_mod is not None:
-                    bus_factory = getattr(interface_mod, "Bus", None)
-            if bus_factory is None:
-                bus_mod = getattr(can, "bus", None)
-                if bus_mod is not None:
-                    bus_factory = getattr(bus_mod, "Bus", None)
-            if bus_factory is None:
-                raise AttributeError("python-can installation does not expose a Bus factory")
-
-            self.bus = bus_factory(
+            self.bus = can.interface.Bus(
                 channel=self.channel,
-                interface="socketcan"
+                bustype="socketcan"
             )
             self.success = True
             self.status = "CAN1_INITIALIZED"

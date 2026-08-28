@@ -1,20 +1,103 @@
-const socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
 
-function showTab(tabId, button) {
+// ========== TAB SWITCHING ==========
+function showTab(tabId, btnElement) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
+    const targetTab = document.getElementById(tabId);
+    if (targetTab) targetTab.classList.add('active');
+
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active-tab'));
-    if (button) button.classList.add('active-tab');
+    if (btnElement) btnElement.classList.add('active-tab');
 }
 
-function getRadioValue(name) {
-    const selected = document.querySelector(`input[name="${name}"]:checked`);
-    return selected ? selected.value : null;
+// ========== LIVE UTC CLOCK ==========
+function tickClock() {
+    const el = document.getElementById('stat_time');
+    if (el) el.textContent = new Date().toISOString().substr(11, 8) + 'Z';
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ========== STATUS BAR ==========
+function setStatusBox(el, ok, label) {
+    el.classList.remove('good', 'error');
+    el.classList.add(ok ? 'good' : 'error');
+    el.textContent = label;
 }
 
+socket.on('status_bar_update', function (data) {
+    document.getElementById('stat_cpu').textContent = (data.cpu ?? '--') + '%';
+
+    const temp = data.temperature;
+    const hum = data.humidity;
+    document.getElementById('stat_temp').textContent = (temp !== null && temp !== undefined ? temp : '--') + ' \u00b0C';
+    document.getElementById('stat_hum').textContent = (hum !== null && hum !== undefined ? hum : '--') + ' %';
+
+    const can = data.can || {};
+    const canEl = document.getElementById('stat_can');
+    const canOk = can.state === 'UP' && can.health === 'OK';
+    setStatusBox(canEl, canOk, `${can.state || '--'} / ${can.health || '--'}`);
+    canEl.title = can.detail || '';
+
+    const eepromEl = document.getElementById('stat_eeprom');
+    const eepromOk = !!(data.eeprom && data.eeprom.present);
+    setStatusBox(eepromEl, eepromOk, eepromOk ? 'GOOD' : 'ERROR');
+
+    const mqttEl = document.getElementById('stat_mqtt');
+    const mqtt = data.mqtt || {};
+    const mqttOk = !!mqtt.connected || !!mqtt.reachable;
+    setStatusBox(mqttEl, mqttOk, mqtt.connected ? 'CONNECTED' : (mqtt.reachable ? 'REACHABLE' : 'DOWN'));
+});
+
+socket.on('mqtt_status', function (data) {
+    const mqttEl = document.getElementById('stat_mqtt');
+    if (!mqttEl) return;
+    setStatusBox(mqttEl, !!data.connected, data.connected ? 'CONNECTED' : 'DOWN');
+});
+
+// ========== MQTT CONFIG MODAL ==========
+function openMQTTConfig() {
+    fetch('/get_mqtt_config')
+        .then(r => r.json())
+        .then(config => {
+            document.getElementById('mqtt_hostname').value = config.hostname || '';
+            document.getElementById('mqtt_port').value = config.port || '';
+            document.getElementById('mqtt_topic').value = config.topic || '';
+            document.getElementById('mqtt_username').value = config.username || '';
+            document.getElementById('mqtt_password').value = config.password || '';
+        })
+        .catch(err => console.error('Failed to load MQTT config:', err));
+    document.getElementById('mqttConfigModal').style.display = 'block';
+}
+
+function closeMQTTConfig() {
+    document.getElementById('mqttConfigModal').style.display = 'none';
+}
+
+function saveMQTTConfig() {
+    const config = {
+        hostname: document.getElementById('mqtt_hostname').value,
+        port: parseInt(document.getElementById('mqtt_port').value),
+        topic: document.getElementById('mqtt_topic').value,
+        username: document.getElementById('mqtt_username').value,
+        password: document.getElementById('mqtt_password').value
+    };
+    fetch('/update_mqtt', { method: 'POST', body: JSON.stringify(config), headers: { 'Content-Type': 'application/json' } })
+        .then(r => r.json())
+        .then(data => console.log(data));
+    closeMQTTConfig();
+}
+
+function exportLog() {
+    socket.emit('export_log');
+    alert('Log export sent to MQTT broker.');
+}
+
+// ========== INSPECTION TAB ==========
 function saveInspection() {
-    const visual = getRadioValue('visual');
-    const electrical = getRadioValue('electrical');
+    const visual = document.querySelector('input[name="visual"]:checked');
+    const electrical = document.querySelector('input[name="electrical"]:checked');
+
     if (!visual || !electrical) {
         alert('Please answer both inspection questions before saving.');
         return;
@@ -23,124 +106,231 @@ function saveInspection() {
     fetch('/save_inspection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visual, electrical })
-    }).then(res => res.json()).then(data => {
-        if (data.status === 'success') alert('Inspection saved successfully.');
-    });
-}
-
-function saveChargerResult() {
-    const payload = {
-        vout: document.getElementById('chargerVout').textContent,
-        iout: document.getElementById('chargerIout').textContent,
-        temp: document.getElementById('chargerTemp').textContent,
-        interface_status: getRadioValue('chargerStatusChoice') || 'error',
-        message: document.getElementById('chargerMessage').value || 'No message'
-    };
-
-    fetch('/save_charger_result', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(res => res.json()).then(data => {
-        if (data.status === 'success') alert('Charger result saved successfully.');
-    });
-}
-
-function saveBatteryResult() {
-    const payload = {
-        battery_state: document.getElementById('batteryStateSelect').value || 'not tested',
-        charger_connected: getRadioValue('chargerConnected') || 'not tested',
-        status: document.getElementById('batteryStatusValue').textContent || 'not tested',
-        power_source: document.getElementById('powerSourceValue').textContent || 'not tested',
-        power_off_confirmed: getRadioValue('powerOffConfirmed') || 'not tested'
-    };
-
-    fetch('/save_battery_result', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(res => res.json()).then(data => {
-        if (data.status === 'success') alert('Battery result saved successfully.');
-    });
-}
-
-function saveDcOutput() {
-    const payload = {
-        port_1: getRadioValue('port1') || 'not tested',
-        port_2: getRadioValue('port2') || 'not tested',
-        port_3: getRadioValue('port3') || 'not tested',
-        battery_backup: getRadioValue('batteryBackup') || 'not tested',
-        notes: document.getElementById('dcNotes').value || ''
-    };
-
-    fetch('/save_dc_output', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(res => res.json()).then(data => {
-        if (data.status === 'success') alert('DC output result saved successfully.');
-    });
-}
-
-function updateStatusDisplay(data) {
-    document.getElementById('cpuValue').textContent = data.cpu ?? '--';
-    document.getElementById('canValue').textContent = data.can_uplink ?? 'DOWN';
-    document.getElementById('tempValue').textContent = data.temp ?? '--';
-    document.getElementById('humValue').textContent = data.hum ?? '--';
-    document.getElementById('eepromValue').textContent = data.eeprom ?? 'ERROR';
-    document.getElementById('mqttValue').textContent = data.mqtt ?? 'DOWN';
-    document.getElementById('timestampValue').textContent = data.timestamp ?? '--';
-
-    const values = [
-        document.getElementById('cpuValue'),
-        document.getElementById('canValue'),
-        document.getElementById('eepromValue'),
-        document.getElementById('mqttValue')
-    ];
-
-    values.forEach(el => {
-        if (!el) return;
-        if (el.textContent === 'ERROR' || el.textContent === 'DOWN' || el.textContent === 'FAIL') {
-            el.style.color = '#ef4444';
-        } else if (el.textContent === 'GOOD' || el.textContent === 'UP') {
-            el.style.color = '#35c46b';
+        body: JSON.stringify({ visual: visual.value, electrical: electrical.value })
+    })
+    .then(r => r.json())
+    .then(data => {
+        const msg = document.getElementById('inspectionSavedMsg');
+        if (data.status === 'success') {
+            msg.textContent = '\u2705 Inspection saved.';
         } else {
-            el.style.color = '#edf2ff';
+            msg.textContent = '\u274c ' + (data.message || 'Error saving inspection.');
         }
-    });
+    })
+    .catch(err => alert('Error: ' + err.message));
 }
 
-function renderQC() {
-    fetch('/get_last_log')
-        .then(res => res.json())
-        .then(log => {
-            const list = [];
-            const inspection = log['board-inspection-status'] || {};
-            const charger = log['charger'] || {};
-            const battery = log['battery'] || {};
-            const dc = log['dc-output'] || {};
+// ========== CHARGER TAB ==========
+function renderCharger(payload) {
+    const d = payload.data || {};
+    document.getElementById('charger_vout').textContent = d.vout !== undefined ? d.vout + ' V' : '--';
+    document.getElementById('charger_iout').textContent = d.iout !== undefined ? d.iout + ' A' : '--';
+    document.getElementById('charger_temp').textContent = d.temp !== undefined ? d.temp + ' \u00b0C' : '--';
 
-            list.push({ label: 'Visual inspection', ok: inspection.visual === 'yes' });
-            list.push({ label: 'Electrical inspection', ok: inspection.electrical === 'yes' });
-            list.push({ label: 'Charger interface working', ok: charger.interface_status === 'good' });
-            list.push({ label: 'Battery connected', ok: battery.charger_connected === 'connected' || battery.charger_connected === 'disconnected' });
-            list.push({ label: 'Battery backup check', ok: dc.battery_backup === 'yes' || dc.battery_backup === 'pass' });
-            list.push({ label: 'DC output test', ok: dc.port_1 !== 'not tested' && dc.port_2 !== 'not tested' && dc.port_3 !== 'not tested' });
+    const stateEl = document.getElementById('charger_state');
+    setStatusBox(stateEl, !!payload.working, payload.working ? 'GOOD' : 'ERROR');
+    document.getElementById('charger_message').textContent = payload.message || '--';
+}
 
-            const generatedHtml = list.map(item => 
-                '<div>' + (item.ok ? '✅' : '❌') + ' ' + item.label + '</div>'
-            ).join('');
+socket.on('charger_data', renderCharger);
 
-            document.getElementById('qcResultsList').innerHTML = generatedHtml;
-            const qcStatus = list.every(item => item.ok) ? 'PASSED' : 'FAILED';
-            document.getElementById('qcResultsList').dataset.qcStatus = qcStatus;
+function testCharger() {
+    document.getElementById('charger_message').textContent = 'Reading...';
+    fetch('/charger/read')
+        .then(r => r.json())
+        .then(renderCharger)
+        .catch(err => {
+            document.getElementById('charger_message').textContent = 'Fetch error: ' + err.message;
         });
 }
 
+// ========== BATTERY TAB ==========
+function renderBattery(payload) {
+    const d = payload.data || {};
+    const basic = d.batt_basic || {};
+    const adv = d.batt_advance || {};
+
+    document.getElementById('batt_voltage').textContent = basic.voltage !== undefined ? basic.voltage + ' V' : '--';
+    document.getElementById('batt_current').textContent = basic.current !== undefined ? basic.current + ' A' : '--';
+    document.getElementById('batt_soc').textContent = basic.soc !== undefined ? basic.soc + ' %' : '--';
+    document.getElementById('batt_state').textContent = basic.battery_state || '--';
+    document.getElementById('batt_charger_conn').textContent = basic.charger_connected === undefined
+        ? '--' : (basic.charger_connected ? 'Connected' : 'Disconnected');
+
+    document.getElementById('batt_adv_temp').textContent = adv.temperature !== undefined ? adv.temperature + ' \u00b0C' : '--';
+    document.getElementById('batt_runtime').textContent = (adv.runtime_minutes ?? '--');
+    document.getElementById('batt_cells').textContent = Array.isArray(adv.cell_voltages)
+        ? adv.cell_voltages.join(', ') : '--';
+
+    document.getElementById('battery_message').textContent = payload.message || '--';
+}
+
+socket.on('battery_data', renderBattery);
+
+function testBattery() {
+    document.getElementById('battery_message').textContent = 'Reading...';
+    fetch('/battery/read')
+        .then(r => r.json())
+        .then(renderBattery)
+        .catch(err => {
+            document.getElementById('battery_message').textContent = 'Fetch error: ' + err.message;
+        });
+}
+
+// Show the mock AC simulation controls only when running without real CAN hardware
+fetch('/system/hw_status')
+    .then(r => r.json())
+    .then(data => {
+        if (data.battery_mock) {
+            document.getElementById('mockAcControls').style.display = 'block';
+        }
+    })
+    .catch(() => {});
+
+function setMockAc(present) {
+    fetch('/battery/mock_ac', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ present: present })
+    }).then(r => r.json()).then(data => console.log(data));
+}
+
+// ========== DC OUT TAB ==========
+function saveDcOutPorts() {
+    const ports = ['port1', 'port2', 'port3'];
+    const results = {};
+    for (const p of ports) {
+        const checked = document.querySelector(`input[name="${p}"]:checked`);
+        if (!checked) {
+            alert('Please answer all three DC out port questions before saving.');
+            return;
+        }
+        results[p] = checked.value;
+    }
+
+    Promise.all(ports.map(p => fetch('/dc_out/save_port', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port: p, result: results[p] })
+    })))
+    .then(() => {
+        document.getElementById('dcOutSavedMsg').textContent = '\u2705 DC out results saved.';
+    })
+    .catch(err => alert('Error saving DC out results: ' + err.message));
+}
+
+function confirmBackupTest(confirmedOff) {
+    const resultEl = document.getElementById('backupTestResult');
+
+    if (!confirmedOff) {
+        resultEl.textContent = 'Please turn off the charger output / remove AC input to continue this test.';
+        return;
+    }
+
+    resultEl.textContent = 'Polling battery for Discharging / Disconnected state (up to 20s)...';
+
+    fetch('/dc_out/backup/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmed_off: true })
+    })
+    .then(r => r.json())
+    .then(payload => {
+        if (payload.status === 'waiting') {
+            resultEl.textContent = payload.message;
+            return;
+        }
+        const result = payload.result || {};
+        if (result.result === 'pass') {
+            resultEl.textContent = `\u2705 Battery backup confirmed - Discharging / Disconnected after ${result.elapsed_s}s.`;
+        } else {
+            resultEl.textContent = `\u274c Timed out waiting for Discharging / Disconnected state ` +
+                `(last seen: state=${result.observed_battery_state}, charger_connected=${result.observed_charger_connected}). ` +
+                `Confirm AC/charger is actually off, then try again.`;
+        }
+    })
+    .catch(err => {
+        resultEl.textContent = 'Error running backup test: ' + err.message;
+    });
+}
+
+// ========== QC MODAL ==========
 function openQCModal() {
-    renderQC();
+    document.getElementById('qcResult').innerText = '';
     document.getElementById('qcModal').style.display = 'block';
+    document.getElementById('qcResultsList').innerHTML = '<p>Loading...</p>';
+    document.getElementById('qcSummaryBanner')?.remove();
+
+    fetch('/get_last_log').then(r => r.json()).then(logData => {
+        const items = [];
+
+        const sys = logData['system-check'] || {};
+        items.push({ label: `CPU Usage: ${sys['cpu-usage']}`, ok: sys['cpu-usage'] !== null && sys['cpu-usage'] !== undefined });
+        items.push({ label: `Temperature: ${sys['temperature']}`, ok: sys['temperature'] !== null && sys['temperature'] !== undefined });
+        items.push({ label: `Humidity: ${sys['humidity']}`, ok: sys['humidity'] !== null && sys['humidity'] !== undefined });
+
+        const insp = logData['inspection-status'] || {};
+        items.push({ label: `Visual Inspection: ${insp.visual}`, ok: insp.visual === 'yes' });
+        items.push({ label: `Electrical Inspection: ${insp.electrical}`, ok: insp.electrical === 'yes' });
+
+        const ch = logData['charger-status'] || {};
+        items.push({ label: `Charger Interface: ${ch.message}`, ok: ch.working === true });
+
+        const batt = logData['battery-status'] || {};
+        items.push({ label: `Battery Interface: ${batt.message}`, ok: batt.working === true });
+
+        const dcOut = logData['dc-output-status'] || {};
+        for (const [k, v] of Object.entries(dcOut)) {
+            items.push({ label: `DC Out ${k}: ${v}`, ok: v === 'pass' });
+        }
+
+        const backup = logData['battery-backup-status'] || {};
+        items.push({ label: `Battery Backup Test: ${backup.result}`, ok: backup.result === 'pass' });
+
+        const can = logData['can-status'] || {};
+        items.push({ label: `CAN1 Uplink: ${can.state} / ${can.health}`, ok: can.state === 'UP' && can.health === 'OK' });
+
+        const eepromStat = logData['eeprom-status'] || {};
+        items.push({ label: `EEPROM (0x59): ${eepromStat.present ? 'GOOD' : 'ERROR'}`, ok: !!eepromStat.present });
+
+        let html = '<ul>';
+        const failed = [];
+        items.forEach(it => {
+            const mark = it.ok ? '\u2705' : '\u274c';
+            html += `<li><strong>${it.label}</strong> ${mark}</li>`;
+            if (!it.ok) failed.push(it.label);
+        });
+        html += '</ul>';
+
+        const allOk = failed.length === 0;
+        const banner = document.createElement('div');
+        banner.id = 'qcSummaryBanner';
+        banner.style.padding = '10px';
+        banner.style.borderRadius = '6px';
+        banner.style.marginBottom = '10px';
+        banner.style.textAlign = 'center';
+
+        if (allOk) {
+            banner.innerText = '\u2705 All tests passed - ready to confirm QC.';
+            banner.style.backgroundColor = '#00c853';
+            banner.style.color = 'white';
+            document.getElementById('qcTitle').innerText = 'QC PASSED';
+            document.getElementById('qcResult').setAttribute('data-status', 'passed');
+        } else {
+            banner.innerText = '\u274c Some tests failed or incomplete - review before confirming.';
+            banner.style.backgroundColor = '#ff4c4c';
+            banner.style.color = 'white';
+            document.getElementById('qcTitle').innerText = 'QC FAILED';
+            document.getElementById('qcResult').setAttribute('data-status', 'failed');
+        }
+
+        document.getElementById('qcResultsList').innerHTML = html;
+        document.getElementById('qcModal').querySelector('.modal-content').prepend(banner);
+        document.getElementById('qcModal').dataset.failed = JSON.stringify(failed);
+    }).catch(err => {
+        console.error('QC load error:', err);
+        document.getElementById('qcResultsList').innerHTML = '<p style="color:red;">Failed to load test results.</p>';
+    });
 }
 
 function closeQCModal() {
@@ -148,30 +338,103 @@ function closeQCModal() {
 }
 
 function confirmQC() {
-    const status = document.getElementById('qcResultsList').dataset.qcStatus || 'FAILED';
-    const payload = {
-        qc_status: status,
-        qc_fail_reasons: status === 'FAILED' ? ['One or more QC checks failed'] : [],
-        full_log: null,
-        timestamp: new Date().toISOString()
-    };
+    const status = document.getElementById('qcResult').getAttribute('data-status') || 'failed';
+    const failed = JSON.parse(document.getElementById('qcModal').dataset.failed || '[]');
 
-    fetch('/write_eeprom_full', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(res => res.json()).then(() => {
-        alert('QC written to EEPROM.');
-        closeQCModal();
-    });
+    if (status === 'failed' && failed.length === 0) {
+        if (!confirm('QC is marked FAILED but no failing items were detected. Proceed to write FAILED QC anyway?')) return;
+    }
+    if (status === 'failed' && failed.length > 0) {
+        if (!confirm('QC failures detected:\n\n' + failed.join('\n') + '\n\nProceed to save QC as FAILED?')) return;
+    }
+
+    fetch('/get_test_info')
+        .then(r => r.json())
+        .then(info => {
+            const payload = {
+                uuid: info.pcbserial || 'UNKNOWN',
+                hw: info.modelnumber || 'UNKNOWN',
+                timestamp: new Date().toISOString(),
+                qc_status: (status === 'passed') ? 'PASSED' : 'FAILED',
+                qc_fail_reasons: failed,
+                full_log: null
+            };
+            return fetch('/write_eeprom_full', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success') {
+                alert('QC recorded to EEPROM: ' + res.device_info.qc_status);
+                const qcFinalStatus = (status === 'passed') ? 'PASSED' : 'FAILED';
+                socket.emit('qc_status_update', { qc_status: qcFinalStatus, qc_fail_reasons: failed });
+                closeQCModal();
+            } else {
+                alert('Failed to write EEPROM: ' + (res.message || JSON.stringify(res)));
+            }
+        })
+        .catch(err => alert('Error while confirming QC: ' + err));
 }
 
-function showBoardInfo() {
+// ========== DEVICE INFO MODAL ==========
+function buildNestedList(obj) {
+    let html = '<ul style="list-style-type:none; padding-left:0; text-align:left;">';
+    for (const key in obj) {
+        const val = obj[key];
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+            html += `<li style="padding:6px 0;"><strong>${key}</strong><ul style="list-style-type:none; padding-left:15px; margin-top:5px;">`;
+            for (const subKey in val) {
+                html += `<li style="padding:3px 0;"><strong>${subKey}:</strong> ${val[subKey]}</li>`;
+            }
+            html += '</ul></li>';
+        } else if (Array.isArray(val)) {
+            html += `<li style="padding:6px 0;"><strong>${key}:</strong><ul style="list-style-type:disc; padding-left:20px;">`;
+            val.forEach(item => { html += `<li>${item}</li>`; });
+            html += '</ul></li>';
+        } else {
+            html += `<li style="padding:6px 0; border-bottom:1px solid #333;"><strong>${key}:</strong> ${val}</li>`;
+        }
+    }
+    html += '</ul>';
+    return html;
+}
+
+function showDeviceInfo() {
     fetch('/device_info')
         .then(res => res.json())
         .then(data => {
+            const modal = document.getElementById('deviceInfoModal');
             const content = document.getElementById('deviceInfoData');
-            content.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+            if (data.status !== 'success') {
+                content.innerHTML = `<p style="color:red;">Error: ${data.message || 'Unknown error'}</p>`;
+                modal.style.display = 'block';
+                return;
+            }
+
+            const dev = data.device_info || {};
+            const log = data.log_report || {};
+
+            let html = '<h3 style="margin-bottom:5px;">Device Info</h3><ul style="list-style-type:none; padding-left:0;">';
+            if (Object.keys(dev).length === 0) {
+                html += '<li>(No device info available)</li>';
+            } else {
+                Object.keys(dev).forEach(key => {
+                    html += `<li style="padding:6px 0; border-bottom:1px solid #333;"><strong>${key}:</strong> ${dev[key]}</li>`;
+                });
+            }
+            html += '</ul><br><h3 style="margin-bottom:5px;">Test Log</h3>';
+            html += Object.keys(log).length === 0 ? '<p>(No test log available)</p>' : buildNestedList(log);
+
+            content.innerHTML = html;
+            modal.style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Device Info Fetch Error:', err);
+            document.getElementById('deviceInfoData').innerHTML = '<p style="color:red;">Error fetching device info.</p>';
             document.getElementById('deviceInfoModal').style.display = 'block';
         });
 }
@@ -179,28 +442,3 @@ function showBoardInfo() {
 function closeDeviceInfo() {
     document.getElementById('deviceInfoModal').style.display = 'none';
 }
-
-function exportLog() {
-    fetch('/export_log')
-        .then(res => res.json())
-        .then(data => {
-            alert(data.message || 'Log exported.');
-        });
-}
-
-socket.on('status_update', function (data) {
-    updateStatusDisplay(data);
-    document.getElementById('chargerVout').textContent = data.temp ? data.temp + 'C' : '--';
-    document.getElementById('chargerIout').textContent = '0.0A';
-    document.getElementById('chargerTemp').textContent = data.temp ? data.temp + 'C' : '--';
-    document.getElementById('chargerStatus').textContent = data.mqtt === 'UP' ? 'GOOD' : 'ERROR';
-    document.getElementById('batteryStateValue').textContent = 'Charging';
-    document.getElementById('chargerConnectedValue').textContent = 'Connected';
-    document.getElementById('batteryStatusValue').textContent = 'Running on AC';
-    document.getElementById('powerSourceValue').textContent = 'AC/Charger';
-});
-
-window.addEventListener('load', () => {
-    fetch('/read_status').then(res => res.json()).then(data => updateStatusDisplay(data));
-    renderQC();
-});

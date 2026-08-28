@@ -1,36 +1,54 @@
+"""
+24xx-series EEPROM driver for the PDU board.
+
+Adapted from the ACU testbench's eeprom.py:
+  - address changed 0x50 -> 0x59 (per PDU board schematic)
+  - write-protect GPIO is optional here (EEPROM_WP_GPIO in config.py);
+    the ACU board hard-wires P8_11 for WP, the PDU may not
+  - added probe() - a non-destructive presence check used by the
+    status bar ("EEPROM: GOOD/ERROR" at 0x59 on i2c-2)
+"""
+import smbus2
 import time
 
-try:
-    import smbus2
-except Exception:  # pragma: no cover - runtime on non-BBB hosts
-    smbus2 = None
+from config import I2C_BUS, EEPROM_ADDR, EEPROM_WP_GPIO
 
 try:
     import Adafruit_BBIO.GPIO as GPIO
-except Exception:  # pragma: no cover - runtime on non-BBB hosts
-    GPIO = None
+except ImportError:
+    GPIO = None  # allows import on a non-BeagleBone dev machine
 
 
 class EEPROM:
     def __init__(self):
-        self.eeprom_addr = 0x50
-        self.wp_gpio = "P8_11"
-        self.bus = None
-        self.gpio_available = GPIO is not None and smbus2 is not None
-        if self.gpio_available:
-            self.bus = smbus2.SMBus(2)
+        self.eeprom_addr = EEPROM_ADDR
+        self.wp_gpio = EEPROM_WP_GPIO
+        self.bus = smbus2.SMBus(I2C_BUS)
+
+        if self.wp_gpio and GPIO:
             GPIO.setup(self.wp_gpio, GPIO.OUT)
             self.write_protect(False)
 
     def write_protect(self, enable_write):
-        if not self.gpio_available:
-            return
+        if not (self.wp_gpio and GPIO):
+            return  # no WP line wired on this board - nothing to do
         GPIO.output(self.wp_gpio, GPIO.LOW if enable_write else GPIO.HIGH)
+
+    def probe(self):
+        """
+        Non-destructive presence check for the status bar.
+        Attempts a zero-length address-only write; an ACK means a device
+        is present at EEPROM_ADDR on I2C_BUS. Returns True/False.
+        """
+        try:
+            msg = smbus2.i2c_msg.write(self.eeprom_addr, [0x00, 0x00])
+            self.bus.i2c_rdwr(msg)
+            return True
+        except Exception:
+            return False
 
     def write_eeprom(self, start_addr, data):
         try:
-            if not self.gpio_available or self.bus is None:
-                return False
             self.write_protect(True)
             for offset, byte in enumerate(data):
                 mem_addr = start_addr + offset
@@ -40,15 +58,12 @@ class EEPROM:
                 self.bus.i2c_rdwr(write_msg)
                 time.sleep(0.01)
             self.write_protect(False)
-            return True
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return False
+            print(f"EEPROM write error: {e}")
+            raise
 
     def read_eeprom(self, start_addr, length):
         try:
-            if not self.gpio_available or self.bus is None:
-                return []
             data_out = []
             for offset in range(length):
                 mem_addr = start_addr + offset
@@ -60,18 +75,10 @@ class EEPROM:
                 data_out.append(list(read_msg)[0])
             return data_out
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return []
+            print(f"EEPROM read error: {e}")
+            raise
 
     def close(self):
-        if GPIO is not None:
-            try:
-                GPIO.cleanup()
-            except Exception:
-                pass
-        if self.bus is not None:
-            try:
-                self.bus.close()
-            except Exception:
-                pass
-        self.bus = None
+        if GPIO:
+            GPIO.cleanup()
+        self.bus.close()

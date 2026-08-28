@@ -10,7 +10,7 @@ from Battery.qhb_address import QHB_ADDRESS_MAP
 
 mqtt_broker = "10.30.250.241"
 mqtt_port = 1883    
-mqtt_topic = "rnd/rdu03/battery_data"
+
 
 mqtt_client = mqtt.Client()
 mqtt_client.connect(mqtt_broker, mqtt_port, 60)
