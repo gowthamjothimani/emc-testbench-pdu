@@ -48,6 +48,12 @@ class EEPROM:
             return False
 
     def write_eeprom(self, start_addr, data):
+        if any(byte == 0b10000000 for byte in data):
+            raise ValueError(
+                "Refusing to write 0b10000000 to EEPROM address 0x59: "
+                "this command remotely shuts down the unit."
+            )
+
         try:
             self.write_protect(True)
             for offset, byte in enumerate(data):
