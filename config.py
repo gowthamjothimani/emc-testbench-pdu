@@ -10,7 +10,8 @@ inside the driver modules.
 # ---------------- I2C ----------------
 I2C_BUS = 2                     # BeagleBone Black i2c-2 (P9_19/P9_20), same bus used by ACU testbench
 HDC302X_ADDR = 0x47             # Temp/Hum sensor - same part/address as ACU board
-EEPROM_ADDR = 0x59              # 24xx-series EEPROM on the PDU board (ACU used 0x50 - PDU uses 0x59)
+EEPROM_ADDR = 0x50              # 24xx-series EEPROM on the PDU board
+MAX7320_ADDR = 0x59              # MAX7320 output extender; 0x80 is its remote-shutdown command
 
 # 24xx-series EEPROM page size. 32 is a safe default for 24LC32/24LC64-class
 # parts; if the PDU's EEPROM part number is smaller/larger, adjust this and
