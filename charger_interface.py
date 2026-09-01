@@ -56,7 +56,18 @@ class ChargerInterface:
         chgr = (data or {}).get("pdu_chgr")
         if not chgr:
             return False, "No data received from charger (NA)"
+
         err = chgr.get("chgr_error")
         if err:
-            return False, f"{err.get('chgr_error_code', 'ERR')}: {err.get('chgr_error_message', 'unknown fault')}"
+            if isinstance(err, dict) and (err.get("chgr_error_code") or err.get("chgr_error_message")):
+                return False, f"{err.get('chgr_error_code', 'ERR')}: {err.get('chgr_error_message', 'unknown fault')}"
+            return False, "Charger returned an error state"
+
+        has_value = any(
+            chgr.get(key) not in (None, "", 0.0, 0)
+            for key in ("chgr_vout_DC", "chgr_iout", "chgr_temp", "chgr_vin_AC")
+        )
+        if not has_value:
+            return False, "No charger telemetry received"
+
         return True, "Charger interface working"

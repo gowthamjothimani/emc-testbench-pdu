@@ -1,4 +1,6 @@
+from config import EEPROM_WINDOW_END
 from log_exporter import LogExporter
+from charger_interface import ChargerInterface
 
 
 class DummyMQTT:
@@ -29,3 +31,12 @@ def test_indicator_tracking_tracks_pushbutton_and_rgb():
     assert current["indicator-status"]["pushbutton"] == "working"
     assert current["indicator-status"]["rgb_led"]["blue"] == "working"
     assert current["indicator-status"]["rgb_led_status"] == "working"
+
+
+def test_charger_status_requires_real_telemetry():
+    assert ChargerInterface.is_working({"pdu_chgr": {"chgr_error": {}}}) == (False, "No charger telemetry received")
+    assert ChargerInterface.is_working({"pdu_chgr": {"chgr_vout_DC": "48.0V", "chgr_error": {}}}) == (True, "Charger interface working")
+
+
+def test_eeprom_window_is_large_enough_for_full_session_log():
+    assert EEPROM_WINDOW_END >= 4096

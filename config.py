@@ -6,7 +6,7 @@ MAX7320_ADDR = 0x59
 EEPROM_PAGE_SIZE = 32
 EEPROM_WP_GPIO = None           
 EEPROM_WINDOW_START = 0x0000
-EEPROM_WINDOW_END = 0x0800      
+EEPROM_WINDOW_END = 0x1000      # 4096 bytes; keeps full QC log within EEPROM window
 
 # CAN
 CAN_CHANNEL = "can1"          
