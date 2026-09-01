@@ -26,18 +26,12 @@ class ChargerInterface:
             return
 
         self._charger = NPB_Charger(channel=can_channel, address=address)
-        try:
-            self._charger.start_device()
-        except Exception as e:
-            print(f"ChargerInterface: start_device() failed during initialization: {e}")
 
     def read_data(self) -> dict:
         if not self.available:
             data = _na_payload("NO_DRIVER", "Charger driver not installed - see Charger/NPB.py")
         else:
             try:
-                if not getattr(self._charger, "charger_initialized", False):
-                    self._charger.start_device()
                 data = self._charger.read_data()
                 print(f"ChargerInterface: read_data() returned: {data}")
             except Exception as e:
