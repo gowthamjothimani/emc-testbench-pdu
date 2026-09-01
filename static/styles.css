@@ -147,6 +147,11 @@ body {
     box-shadow: 0 0 10px rgba(218, 54, 51, 0.5);
 }
 
+.status-box.na {
+    background-color: #444c56;
+    color: #d3d3d3;
+}
+
 .data-row {
     display: flex;
     justify-content: space-between;
@@ -185,15 +190,6 @@ body {
 .btn-group { display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; }
 
 .saved-msg { color: var(--neon-green); font-weight: bold; margin-top: 10px; min-height: 1.2em; }
-
-.mock-controls {
-    margin-top: 15px;
-    padding: 10px;
-    border: 1px dashed var(--border-color);
-    border-radius: 6px;
-    font-size: 0.8rem;
-    color: #d3a12a;
-}
 
 /* ========== Tabs ========== */
 .tab { display: none; }
@@ -252,3 +248,22 @@ body {
 .input-row input { flex: 1; padding: 6px 10px; background: #0d1117; border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; }
 .btn { border: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; }
 .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
+
+/* ========== Pushbutton indicator (Indicator tab) ========== */
+.push-indicator {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: #333;
+    margin: 15px auto;
+    box-shadow: 0 0 10px #000;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+.push-indicator.pressed-working {
+    background: limegreen;
+    box-shadow: 0 0 20px limegreen;
+}
+.push-indicator.pressed-error {
+    background: #da3633;
+    box-shadow: 0 0 20px #da3633;
+}

@@ -37,6 +37,7 @@
             <button class="tab-button" onclick="showTab('chargerTab', this)">CHARGER</button>
             <button class="tab-button" onclick="showTab('batteryTab', this)">BATTERY</button>
             <button class="tab-button" onclick="showTab('dcOutTab', this)">DC OUT</button>
+            <button class="tab-button" onclick="showTab('indicatorTab', this)">INDICATOR</button>
         </div>
         <div class="master-controls">
             <button class="dashboard-button btn-blue" onclick="openQCModal()">REPORT QC</button>
@@ -98,16 +99,16 @@
                     <div class="data-row">CURRENT <span class="status-box" id="batt_current">--</span></div>
                     <div class="data-row">SOC <span class="status-box" id="batt_soc">--</span></div>
                     <div class="data-row">BATTERY STATE <span class="status-box" id="batt_state">--</span></div>
-                    <div class="data-row">CHARGER CONNECTED <span class="status-box" id="batt_charger_conn">--</span></div>
+                    <div class="data-row">CHARGER <span class="status-box" id="batt_charger_conn">--</span></div>
+                    <div class="data-row">TEMP MAX/MIN <span class="status-box" id="batt_temp_max">--</span> / <span class="status-box" id="batt_temp_min">--</span></div>
                 </div>
                 <div class="control-card">
-                    <h3>BATT_ADVANCE</h3>
-                    <div class="data-row">TEMP <span class="status-box" id="batt_adv_temp">--</span></div>
-                    <div class="data-row">RUNTIME (min) <span class="status-box" id="batt_runtime">--</span></div>
-                    <div class="data-row-full">CELLS <span id="batt_cells" class="mono small">--</span></div>
+                    <h3>BATT_ADVANCE (HEALTH)</h3>
+                    <div class="data-row-full mono small" id="batt_health">NA</div>
                 </div>
                 <div class="control-card full-width">
                     <h3>INTERFACE STATUS</h3>
+                    <div class="data-row">STATUS <span class="status-box" id="battery_state_badge">--</span></div>
                     <div class="data-row-full" id="battery_message">Waiting for first read...</div>
                     <button class="dashboard-button btn-blue" onclick="testBattery()">TEST BATTERY</button>
                 </div>
@@ -152,11 +153,16 @@
                     <button class="dashboard-cancel-button" onclick="confirmBackupTest(false)">NO - NOT YET</button>
                 </div>
                 <div class="data-row-full" id="backupTestResult">Not started.</div>
-                <div class="mock-controls" id="mockAcControls" style="display:none;">
-                    <em>Mock mode (no CAN hardware detected):</em>
-                    <button class="dashboard-button btn-blue small-btn" onclick="setMockAc(false)">Simulate AC OFF</button>
-                    <button class="dashboard-button btn-blue small-btn" onclick="setMockAc(true)">Simulate AC ON</button>
-                </div>
+            </div>
+        </div>
+
+        <!-- ---------- 5. INDICATOR TAB ---------- -->
+        <div id="indicatorTab" class="tab">
+            <div class="control-card">
+                <h3>PUSHBUTTON TEST</h3>
+                <p>Press the physical front-panel pushbutton (requires 2 presses to confirm - rules out a stuck/bouncing switch).</p>
+                <div class="push-indicator" id="pushIndicatorDot"></div>
+                <div class="data-row-full" id="pushbuttonStatus">Waiting for first press...</div>
             </div>
         </div>
 

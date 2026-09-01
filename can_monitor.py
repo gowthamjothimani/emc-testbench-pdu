@@ -1,34 +1,9 @@
-"""
-CAN1 uplink status for the status bar.
-
-Reports two things the operator needs at a glance:
-  - link state:   UP / DOWN            (interface brought up, bitrate set)
-  - health:       OK / ERROR           (bus-off or climbing error counters
-                                         means frames aren't actually
-                                         getting through even if link is UP)
-
-Implemented via `ip -details -statistics link show <iface>` rather than a
-raw SocketCAN bind, so it works even while the charger/battery drivers
-already own the CAN socket - this is a read-only netlink query, not a
-second bus participant.
-"""
 import re
 import subprocess
-
 from config import CAN_CHANNEL
 
-
 def get_can_status(channel: str = CAN_CHANNEL) -> dict:
-    """
-    Returns:
-        {
-            "state": "UP" | "DOWN" | "UNKNOWN",
-            "health": "OK" | "ERROR",
-            "rx_errors": int,
-            "tx_errors": int,
-            "detail": str   # human-readable, e.g. "ERROR-ACTIVE" / "BUS-OFF"
-        }
-    """
+
     result = {
         "state": "UNKNOWN",
         "health": "ERROR",
@@ -48,13 +23,12 @@ def get_can_status(channel: str = CAN_CHANNEL) -> dict:
             result["detail"] = out.stderr.strip() or "interface not found"
             return result
 
-        # Link state: "<UP,LOWER_UP,ECHO>" or "state UP" / "state DOWN"
         if "LOWER_UP" in text or re.search(r"state\s+UP", text):
             result["state"] = "UP"
         else:
             result["state"] = "DOWN"
 
-        # CAN bus-error state (only present with -details on a can iface)
+        # CAN bus-error state 
         detail_match = re.search(r"can state (\S+)", text)
         can_state = detail_match.group(1).upper() if detail_match else None
         if can_state:
@@ -64,9 +38,9 @@ def get_can_status(channel: str = CAN_CHANNEL) -> dict:
             result["detail"] = "ERROR-ACTIVE (assumed)" if result["state"] == "UP" else "link down"
             result["health"] = "OK" if result["state"] == "UP" else "ERROR"
 
-        # RX/TX error counters, if the kernel driver exposes them
+        # RX/TX error counters
         rx_match = re.search(r"re-started bus-errors\s+arbitration-lost\s+error-warning\s+error-passive\s+bus-off\n\s*(\d+)\s+(\d+)", text)
-        # Fallback: generic byte/error counters from -s
+        # Fallback:
         gen_match = re.search(r"RX:.*?\n\s*\d+\s+\d+\s+(\d+)\s+\d+\s+\d+\s+\d+", text)
         if gen_match:
             result["rx_errors"] = int(gen_match.group(1))

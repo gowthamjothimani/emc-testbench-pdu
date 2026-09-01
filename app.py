@@ -4,12 +4,8 @@ import json
 import threading
 import time
 from datetime import datetime
-
 import psutil
-
-from config import (
-    EEPROM_WINDOW_START, EEPROM_WINDOW_END, EEPROM_PAGE_SIZE,
-)
+from config import (EEPROM_WINDOW_START, EEPROM_WINDOW_END, EEPROM_PAGE_SIZE)
 from eeprom import EEPROM
 from can_monitor import get_can_status
 from mqtt_client import MQTTClient
@@ -18,6 +14,7 @@ from sensor_reader import get_temp_hum
 from charger_interface import ChargerInterface
 from battery_interface import BatteryInterface
 from backup_logic import poll_for_discharge
+from indicator import PushbuttonMonitor
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -28,6 +25,7 @@ mqtt_client = MQTTClient(socketio)
 log_exporter = LogExporter(mqtt_client)
 charger = ChargerInterface()
 battery = BatteryInterface()
+pushbutton = PushbuttonMonitor()
 
 tester_info_submitted = False
 testername = pcbserial = modelnumber = projectdetail = None
@@ -105,8 +103,24 @@ def battery_poll_loop():
     def on_update(data):
         working, message = BatteryInterface.is_working(data)
         log_exporter.set_battery_status(data, working, message)
-        socketio.emit('battery_data', {"data": data, "working": working, "message": message})
+        # Report the session-latched verdict to the UI, not just the instantaneous one,
+        # so the Battery tab doesn't flip to "error" the moment AC/charger is removed
+        # for the backup test (see log_exporter.set_battery_status()).
+        locked = log_exporter.battery_status.get("locked_working", False)
+        socketio.emit('battery_data', {
+            "data": data,
+            "working": working,
+            "locked_working": locked,
+            "message": message,
+        })
     battery.poll_forever(interval=1.5, on_update=on_update)
+
+
+def pushbutton_monitor_loop():
+    def on_update(payload):
+        log_exporter.set_pushbutton_status(payload["status"])
+        socketio.emit('button_status', payload)
+    pushbutton.run_forever(on_update)
 
 
 def start_monitoring():
@@ -117,6 +131,7 @@ def start_monitoring():
     threading.Thread(target=status_bar_monitor, daemon=True).start()
     threading.Thread(target=charger_poll_loop, daemon=True).start()
     threading.Thread(target=battery_poll_loop, daemon=True).start()
+    threading.Thread(target=pushbutton_monitor_loop, daemon=True).start()
 
 
 # ========== FLASK ROUTES: TESTER INFO / HOME ==========
@@ -156,8 +171,12 @@ def read_sensors():
 
 @app.route('/system/hw_status')
 def system_hw_status():
-    """Lets the UI know whether it's driving real CAN hardware or the mock fallback."""
-    return jsonify({"charger_mock": charger.mock, "battery_mock": battery.mock})
+    """Lets the UI know whether the real Charger/Battery driver packages are installed at all."""
+    return jsonify({
+        "charger_available": charger.available,
+        "battery_available": battery.available,
+        "pushbutton_available": pushbutton._available,
+    })
 
 
 # ========== INSPECTION TAB ==========
@@ -193,25 +212,16 @@ def battery_read():
     data = battery.read_data()
     working, message = BatteryInterface.is_working(data)
     log_exporter.set_battery_status(data, working, message)
-    return jsonify({"data": data, "working": working, "message": message})
+    locked = log_exporter.battery_status.get("locked_working", False)
+    return jsonify({"data": data, "working": working, "locked_working": locked, "message": message})
 
 
 @app.route('/battery/last')
 def battery_last():
     data = battery.get_last()
     working, message = BatteryInterface.is_working(data)
-    return jsonify({"data": data, "working": working, "message": message})
-
-
-@app.route('/battery/mock_ac', methods=['POST'])
-def battery_mock_ac():
-    """Dev/demo only - lets the UI simulate 'AC removed' when running without real hardware."""
-    if not battery.mock:
-        return jsonify({"status": "ignored", "message": "Real battery hardware attached - mock control has no effect."})
-    payload = request.get_json() or {}
-    present = bool(payload.get("present", True))
-    battery.set_mock_ac_present(present)
-    return jsonify({"status": "success", "ac_present": present})
+    locked = log_exporter.battery_status.get("locked_working", False)
+    return jsonify({"data": data, "working": working, "locked_working": locked, "message": message})
 
 
 # ========== DC OUTPUT TAB ==========

@@ -1,84 +1,108 @@
-"""
-24xx-series EEPROM driver for the PDU board.
-
-Adapted from the ACU testbench's eeprom.py:
-  - address changed 0x50 -> 0x59 (per PDU board schematic)
-  - write-protect GPIO is optional here (EEPROM_WP_GPIO in config.py);
-    the ACU board hard-wires P8_11 for WP, the PDU may not
-  - added probe() - a non-destructive presence check used by the
-    status bar ("EEPROM: GOOD/ERROR" at 0x59 on i2c-2)
-"""
-import smbus2
 import time
+class LogExporter:
+    def __init__(self, mqtt_client):
+        self.mqtt_client = mqtt_client
+        self.test_details = {}
+        self.env_data = {"cpu": None, "temperature": None, "humidity": None}
+        self.inspection = {"visual": "not tested", "electrical": "not tested"}
+        self.charger_status = {"data": {}, "working": None, "message": "not tested"}
+        self.battery_status = {
+            "data": {}, "working": None, "message": "not tested",
+            "locked_working": False,
+        }
 
-from config import I2C_BUS, EEPROM_ADDR, EEPROM_WP_GPIO
+        self.dc_out = {
+            "port1": "not tested",
+            "port2": "not tested",
+            "port3": "not tested",
+        }
+        self.backup_test = {
+            "requested": False,
+            "confirmed_off_by_operator": None,
+            "result": "not tested",
+            "observed_battery_state": None,
+            "observed_charger_connected": None,
+        }
 
-try:
-    import Adafruit_BBIO.GPIO as GPIO
-except ImportError:
-    GPIO = None  # allows import on a non-BeagleBone dev machine
+        self.indicator_status = {"pushbutton": "not tested"}
+        self.can_status = {"state": "UNKNOWN", "health": "ERROR", "detail": ""}
+        self.eeprom_status = {"present": None}
+        self.mqtt_status = {"connected": False, "reachable": None}
+        self.qc_status = "NOT_RUN"
+        self.qc_fail_reasons = []
 
+    # setters 
+    def set_test_details(self, testername, pcbserial, modelnumber=None, projectdetail=None):
+        self.test_details = {
+            "testername": testername,
+            "pcbserial": pcbserial,
+            "modelnumber": modelnumber,
+            "projectdetail": projectdetail,
+        }
 
-class EEPROM:
-    def __init__(self):
-        self.eeprom_addr = EEPROM_ADDR
-        self.wp_gpio = EEPROM_WP_GPIO
-        self.bus = smbus2.SMBus(I2C_BUS)
+    def set_environment_data(self, temperature, humidity, cpu):
+        self.env_data = {"temperature": temperature, "humidity": humidity, "cpu": cpu}
 
-        if self.wp_gpio and GPIO:
-            GPIO.setup(self.wp_gpio, GPIO.OUT)
-            self.write_protect(False)
+    def set_inspection(self, visual, electrical):
+        self.inspection = {"visual": visual, "electrical": electrical}
 
-    def write_protect(self, enable_write):
-        if not (self.wp_gpio and GPIO):
-            return  # no WP line wired on this board - nothing to do
-        GPIO.output(self.wp_gpio, GPIO.LOW if enable_write else GPIO.HIGH)
+    def set_charger_status(self, data, working, message):
+        self.charger_status = {"data": data, "working": working, "message": message}
 
-    def probe(self):
-        """
-        Non-destructive presence check for the status bar.
-        Attempts a zero-length address-only write; an ACK means a device
-        is present at EEPROM_ADDR on I2C_BUS. Returns True/False.
-        """
-        try:
-            msg = smbus2.i2c_msg.write(self.eeprom_addr, [0x00, 0x00])
-            self.bus.i2c_rdwr(msg)
-            return True
-        except Exception:
-            return False
+    def set_battery_status(self, data, working, message):
+        locked = self.battery_status.get("locked_working", False) or bool(working)
+        self.battery_status = {
+            "data": data, "working": working, "message": message,
+            "locked_working": locked,
+        }
 
-    def write_eeprom(self, start_addr, data):
-        try:
-            self.write_protect(True)
-            for offset, byte in enumerate(data):
-                mem_addr = start_addr + offset
-                addr_high = (mem_addr >> 8) & 0xFF
-                addr_low = mem_addr & 0xFF
-                write_msg = smbus2.i2c_msg.write(self.eeprom_addr, [addr_high, addr_low, byte])
-                self.bus.i2c_rdwr(write_msg)
-                time.sleep(0.01)
-            self.write_protect(False)
-        except Exception as e:
-            print(f"EEPROM write error: {e}")
-            raise
+    def set_dc_out_port(self, port_key, result):
+        if port_key in self.dc_out:
+            self.dc_out[port_key] = result
 
-    def read_eeprom(self, start_addr, length):
-        try:
-            data_out = []
-            for offset in range(length):
-                mem_addr = start_addr + offset
-                addr_high = (mem_addr >> 8) & 0xFF
-                addr_low = mem_addr & 0xFF
-                self.bus.i2c_rdwr(smbus2.i2c_msg.write(self.eeprom_addr, [addr_high, addr_low]))
-                read_msg = smbus2.i2c_msg.read(self.eeprom_addr, 1)
-                self.bus.i2c_rdwr(read_msg)
-                data_out.append(list(read_msg)[0])
-            return data_out
-        except Exception as e:
-            print(f"EEPROM read error: {e}")
-            raise
+    def set_backup_test(self, result_dict):
+        self.backup_test.update(result_dict)
 
-    def close(self):
-        if GPIO:
-            GPIO.cleanup()
-        self.bus.close()
+    def set_pushbutton_status(self, status):
+        self.indicator_status["pushbutton"] = status
+
+    def set_can_status(self, status_dict):
+        self.can_status = status_dict
+
+    def set_eeprom_status(self, present):
+        self.eeprom_status = {"present": present}
+
+    def set_mqtt_status(self, connected, reachable):
+        self.mqtt_status = {"connected": connected, "reachable": reachable}
+
+    def set_qc_status(self, status, reasons=None):
+        self.qc_status = status
+        self.qc_fail_reasons = reasons or []
+
+    # readers 
+    def get_last_log(self):
+        return {
+            "test_details": self.test_details,
+            "system-check": {
+                "cpu-usage": self.env_data["cpu"],
+                "temperature": self.env_data["temperature"],
+                "humidity": self.env_data["humidity"],
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            "inspection-status": self.inspection,
+            "charger-status": self.charger_status,
+            "battery-status": self.battery_status,
+            "dc-output-status": self.dc_out,
+            "battery-backup-status": self.backup_test,
+            "indicator-status": self.indicator_status,
+            "can-status": self.can_status,
+            "eeprom-status": self.eeprom_status,
+            "mqtt-status": self.mqtt_status,
+            "qc_status": self.qc_status,
+            "qc_fail_reasons": self.qc_fail_reasons,
+        }
+
+    def export_log(self):
+        data = self.get_last_log()
+        self.mqtt_client.publish_data(data)
+        return data

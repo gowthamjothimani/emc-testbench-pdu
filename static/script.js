@@ -121,14 +121,24 @@ function saveInspection() {
 }
 
 // ========== CHARGER TAB ==========
+// Real driver field names live under data.pdu_chgr (chgr_vout_DC / chgr_iout / chgr_temp / chgr_error).
+// chgr_error non-empty (or pdu_chgr missing) means no real CAN frames -> show NA, never a fabricated number.
 function renderCharger(payload) {
-    const d = payload.data || {};
-    document.getElementById('charger_vout').textContent = d.vout !== undefined ? d.vout + ' V' : '--';
-    document.getElementById('charger_iout').textContent = d.iout !== undefined ? d.iout + ' A' : '--';
-    document.getElementById('charger_temp').textContent = d.temp !== undefined ? d.temp + ' \u00b0C' : '--';
+    const chgr = (payload.data || {}).pdu_chgr || {};
+    const hasFault = !payload.working;
+
+    document.getElementById('charger_vout').textContent = hasFault ? 'NA' : (chgr.chgr_vout_DC ?? 'NA');
+    document.getElementById('charger_iout').textContent = hasFault ? 'NA' : (chgr.chgr_iout ?? 'NA');
+    document.getElementById('charger_temp').textContent = hasFault ? 'NA' : (chgr.chgr_temp ?? 'NA');
 
     const stateEl = document.getElementById('charger_state');
-    setStatusBox(stateEl, !!payload.working, payload.working ? 'GOOD' : 'ERROR');
+    if (payload.working) {
+        setStatusBox(stateEl, true, 'GOOD');
+    } else {
+        stateEl.classList.remove('good', 'error');
+        stateEl.classList.add('na');
+        stateEl.textContent = 'NA';
+    }
     document.getElementById('charger_message').textContent = payload.message || '--';
 }
 
@@ -145,22 +155,46 @@ function testCharger() {
 }
 
 // ========== BATTERY TAB ==========
+// Real driver field names live under data.pdu_batt.batt_basic / batt_advance
+// (batt_voltage, batt_current, batt_soc, batt_state, batt_charger are all
+// STRINGS already formatted by the driver, e.g. "52.10V", "connected").
+//
+// "lockedWorking" (from log_exporter's session latch) is what decides the
+// GOOD/NA badge - NOT the instantaneous `working` flag. That's the fix for
+// the false "error" this used to show the moment the charger disconnects
+// for the backup test: once the battery interface has proven itself once
+// this session, the badge stays GOOD even while batt_charger flips to
+// "disconnected". The live batt_charger value itself is still shown as
+// plain telemetry either way.
 function renderBattery(payload) {
-    const d = payload.data || {};
-    const basic = d.batt_basic || {};
-    const adv = d.batt_advance || {};
+    const batt = (payload.data || {}).pdu_batt || {};
+    const basic = batt.batt_basic || {};
+    const adv = batt.batt_advance || {};
+    const noFrames = !basic || Object.keys(basic).length === 0;
 
-    document.getElementById('batt_voltage').textContent = basic.voltage !== undefined ? basic.voltage + ' V' : '--';
-    document.getElementById('batt_current').textContent = basic.current !== undefined ? basic.current + ' A' : '--';
-    document.getElementById('batt_soc').textContent = basic.soc !== undefined ? basic.soc + ' %' : '--';
-    document.getElementById('batt_state').textContent = basic.battery_state || '--';
-    document.getElementById('batt_charger_conn').textContent = basic.charger_connected === undefined
-        ? '--' : (basic.charger_connected ? 'Connected' : 'Disconnected');
+    document.getElementById('batt_voltage').textContent = noFrames ? 'NA' : (basic.batt_voltage ?? 'NA');
+    document.getElementById('batt_current').textContent = noFrames ? 'NA' : (basic.batt_current ?? 'NA');
+    document.getElementById('batt_soc').textContent = noFrames ? 'NA' : (basic.batt_soc ?? 'NA');
+    document.getElementById('batt_state').textContent = noFrames ? 'NA' : (basic.batt_state ?? 'NA');
+    document.getElementById('batt_charger_conn').textContent = noFrames ? 'NA' : (basic.batt_charger ?? 'NA');
 
-    document.getElementById('batt_adv_temp').textContent = adv.temperature !== undefined ? adv.temperature + ' \u00b0C' : '--';
-    document.getElementById('batt_runtime').textContent = (adv.runtime_minutes ?? '--');
-    document.getElementById('batt_cells').textContent = Array.isArray(adv.cell_voltages)
-        ? adv.cell_voltages.join(', ') : '--';
+    document.getElementById('batt_temp_max').textContent = noFrames ? 'NA' : (basic.batt_temp_max ?? 'NA');
+    document.getElementById('batt_temp_min').textContent = noFrames ? 'NA' : (basic.batt_temp_min ?? 'NA');
+    const health = adv.batt_health || {};
+    document.getElementById('batt_health').textContent = Object.keys(health).length
+        ? Object.entries(health).map(([k, v]) => `${k}: ${v}`).join(', ') : 'NA';
+
+    const badgeEl = document.getElementById('battery_state_badge');
+    const locked = !!payload.locked_working;
+    if (locked) {
+        setStatusBox(badgeEl, true, 'GOOD (locked)');
+    } else if (noFrames) {
+        badgeEl.classList.remove('good', 'error');
+        badgeEl.classList.add('na');
+        badgeEl.textContent = 'NA';
+    } else {
+        setStatusBox(badgeEl, !!payload.working, payload.working ? 'GOOD' : 'ERROR');
+    }
 
     document.getElementById('battery_message').textContent = payload.message || '--';
 }
@@ -175,24 +209,6 @@ function testBattery() {
         .catch(err => {
             document.getElementById('battery_message').textContent = 'Fetch error: ' + err.message;
         });
-}
-
-// Show the mock AC simulation controls only when running without real CAN hardware
-fetch('/system/hw_status')
-    .then(r => r.json())
-    .then(data => {
-        if (data.battery_mock) {
-            document.getElementById('mockAcControls').style.display = 'block';
-        }
-    })
-    .catch(() => {});
-
-function setMockAc(present) {
-    fetch('/battery/mock_ac', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ present: present })
-    }).then(r => r.json()).then(data => console.log(data));
 }
 
 // ========== DC OUT TAB ==========
@@ -242,10 +258,12 @@ function confirmBackupTest(confirmedOff) {
         }
         const result = payload.result || {};
         if (result.result === 'pass') {
-            resultEl.textContent = `\u2705 Battery backup confirmed - Discharging / Disconnected after ${result.elapsed_s}s.`;
+            resultEl.textContent = `\u2705 Battery backup confirmed - Discharging / disconnected after ${result.elapsed_s}s.`;
+        } else if (result.result === 'na') {
+            resultEl.textContent = `\u26a0\ufe0f No battery CAN frames received (NA) - check CAN1 status and battery wiring before retrying.`;
         } else {
-            resultEl.textContent = `\u274c Timed out waiting for Discharging / Disconnected state ` +
-                `(last seen: state=${result.observed_battery_state}, charger_connected=${result.observed_charger_connected}). ` +
+            resultEl.textContent = `\u274c Timed out waiting for Discharging / disconnected state ` +
+                `(last seen: state=${result.observed_battery_state ?? 'NA'}, charger=${result.observed_charger_connected ?? 'NA'}). ` +
                 `Confirm AC/charger is actually off, then try again.`;
         }
     })
@@ -253,6 +271,21 @@ function confirmBackupTest(confirmedOff) {
         resultEl.textContent = 'Error running backup test: ' + err.message;
     });
 }
+
+// ========== INDICATOR TAB (pushbutton) ==========
+socket.on('button_status', function (data) {
+    const dot = document.getElementById('pushIndicatorDot');
+    const label = document.getElementById('pushbuttonStatus');
+    if (!dot || !label) return;
+
+    dot.classList.remove('pressed-working', 'pressed-error');
+    if (data.status === 'working') {
+        dot.classList.add('pressed-working');
+    } else if (data.status === 'error') {
+        dot.classList.add('pressed-error');
+    }
+    label.textContent = `${data.label || '--'} - ${data.status === 'na' ? 'NA (no GPIO on this host)' : data.status.toUpperCase()}`;
+});
 
 // ========== QC MODAL ==========
 function openQCModal() {
@@ -276,8 +309,11 @@ function openQCModal() {
         const ch = logData['charger-status'] || {};
         items.push({ label: `Charger Interface: ${ch.message}`, ok: ch.working === true });
 
+        // Battery QC uses the session-latched verdict, not the instantaneous one -
+        // so the deliberate charger-disconnect during the backup test doesn't
+        // retroactively fail a battery interface that already proved itself.
         const batt = logData['battery-status'] || {};
-        items.push({ label: `Battery Interface: ${batt.message}`, ok: batt.working === true });
+        items.push({ label: `Battery Interface: ${batt.message}`, ok: batt.locked_working === true });
 
         const dcOut = logData['dc-output-status'] || {};
         for (const [k, v] of Object.entries(dcOut)) {
@@ -286,6 +322,9 @@ function openQCModal() {
 
         const backup = logData['battery-backup-status'] || {};
         items.push({ label: `Battery Backup Test: ${backup.result}`, ok: backup.result === 'pass' });
+
+        const indicator = logData['indicator-status'] || {};
+        items.push({ label: `Pushbutton Indicator: ${indicator.pushbutton}`, ok: indicator.pushbutton === 'working' });
 
         const can = logData['can-status'] || {};
         items.push({ label: `CAN1 Uplink: ${can.state} / ${can.health}`, ok: can.state === 'UP' && can.health === 'OK' });
