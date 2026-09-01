@@ -3,6 +3,7 @@ import time
 from config import CAN_CHANNEL
 from Battery.qhb import CAN_QHB
 
+
 def _na_payload(code: str, message: str) -> dict:
     return {
         "pdu_batt": {
