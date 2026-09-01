@@ -180,9 +180,19 @@ function renderBattery(payload) {
 
     document.getElementById('batt_temp_max').textContent = noFrames ? 'NA' : (basic.batt_temp_max ?? 'NA');
     document.getElementById('batt_temp_min').textContent = noFrames ? 'NA' : (basic.batt_temp_min ?? 'NA');
-    const health = adv.batt_health || {};
-    document.getElementById('batt_health').textContent = Object.keys(health).length
-        ? Object.entries(health).map(([k, v]) => `${k}: ${v}`).join(', ') : 'NA';
+    const health = adv.batt_health || adv || {};
+    const healthEntries = Object.entries(health).filter(([, v]) => v !== null && v !== undefined && v !== '');
+    const healthEl = document.getElementById('batt_health');
+    if (healthEntries.length) {
+        healthEl.innerHTML = healthEntries.map(([k, v]) => `
+            <div class="data-row mono small">
+                <span>${k}</span>
+                <span class="status-box">${String(v)}</span>
+            </div>
+        `).join('');
+    } else {
+        healthEl.textContent = 'NA';
+    }
 
     const badgeEl = document.getElementById('battery_state_badge');
     const locked = !!payload.locked_working;
@@ -285,6 +295,35 @@ socket.on('button_status', function (data) {
         dot.classList.add('pressed-error');
     }
     label.textContent = `${data.label || '--'} - ${data.status === 'na' ? 'NA (no GPIO on this host)' : data.status.toUpperCase()}`;
+});
+
+function startIndicatorSequence() {
+    const colors = ['red', 'green', 'blue'];
+    let index = 0;
+
+    const runNext = () => {
+        if (index >= colors.length) {
+            alert('✅ RGB confirmation completed.');
+            return;
+        }
+
+        const color = colors[index];
+        socket.emit('test_rgb_led', { color });
+        setTimeout(() => {
+            const ok = confirm(`Is the ${color.toUpperCase()} LED working?`);
+            socket.emit('rgb_result', { color, status: ok ? 'working' : 'error' });
+            index += 1;
+            runNext();
+        }, 600);
+    };
+
+    runNext();
+}
+
+socket.on('rgb_status', function (data) {
+    const dot = document.getElementById('pushIndicatorDot');
+    if (!dot) return;
+    dot.style.background = data.color === 'red' ? '#ff3131' : data.color === 'green' ? '#2ecc71' : '#3b82f6';
 });
 
 // ========== QC MODAL ==========

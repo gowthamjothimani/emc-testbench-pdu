@@ -15,6 +15,7 @@ from charger_interface import ChargerInterface
 from battery_interface import BatteryInterface
 from backup_logic import poll_for_discharge
 from indicator import PushbuttonMonitor
+from pca9632 import PCA9632
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -26,6 +27,7 @@ log_exporter = LogExporter(mqtt_client)
 charger = ChargerInterface()
 battery = BatteryInterface()
 pushbutton = PushbuttonMonitor()
+rgb_led = PCA9632()
 
 tester_info_submitted = False
 testername = pcbserial = modelnumber = projectdetail = None
@@ -121,6 +123,31 @@ def pushbutton_monitor_loop():
         log_exporter.set_pushbutton_status(payload["status"])
         socketio.emit('button_status', payload)
     pushbutton.run_forever(on_update)
+
+
+@socketio.on('test_rgb_led')
+def test_rgb_led(data):
+    color = (data or {}).get('color')
+    if not color:
+        return
+    try:
+        if color == 'red':
+            rgb_led.red()
+        elif color == 'green':
+            rgb_led.green()
+        elif color == 'blue':
+            rgb_led.blue()
+        socketio.emit('rgb_status', {'color': color})
+    except Exception as exc:
+        print(f'RGB Error: {exc}')
+
+
+@socketio.on('rgb_result')
+def rgb_result(data):
+    color = (data or {}).get('color')
+    status = (data or {}).get('status')
+    if color and status:
+        log_exporter.set_indicator('rgb_led', status, color)
 
 
 def start_monitoring():

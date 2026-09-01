@@ -1,20 +1,9 @@
-"""
-MQTT client - same connect/publish/config pattern as the ACU testbench,
-plus a lightweight reachability ping (used by the status bar) so the
-operator can tell "broker down" apart from "broker up, but this device
-can't route to it" (still shows red either way, but the app.py status
-thread also uses this to decide the network icon independent of whether
-the persistent MQTT session happens to be connected at that instant).
-"""
 import json
 import platform
 import socket
 import subprocess
-
 import paho.mqtt.client as mqtt
-
 from config import MQTT_DEFAULT_CONFIG, MQTT_PING_TIMEOUT_S
-
 
 class MQTTClient:
     def __init__(self, socketio):
@@ -73,11 +62,6 @@ class MQTTClient:
         self.client.publish(publish_topic, payload)
 
     def ping_broker(self) -> bool:
-        """
-        Network-level reachability check for the status bar, independent
-        of the persistent MQTT session state. Uses the system ping so it
-        works even before/if the MQTT client itself hasn't connected yet.
-        """
         host = self.mqtt_config.get("hostname")
         if not host:
             return False

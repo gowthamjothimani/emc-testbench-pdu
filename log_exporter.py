@@ -20,7 +20,21 @@ class LogExporter:
         self.inspection = {"visual": "not tested", "electrical": "not tested"}
 
         self.charger_status = {"data": {}, "working": None, "message": "not tested"}
-        self.battery_status = {"data": {}, "working": None, "message": "not tested"}
+        self.battery_status = {
+            "data": {},
+            "working": None,
+            "message": "not tested",
+            "locked_working": False,
+        }
+        self.indicator_status = {
+            "pushbutton": "not tested",
+            "rgb_led": {
+                "red": "not tested",
+                "green": "not tested",
+                "blue": "not tested",
+            },
+            "rgb_led_status": "error",
+        }
 
         self.dc_out = {
             "port1": "not tested",
@@ -61,7 +75,33 @@ class LogExporter:
         self.charger_status = {"data": data, "working": working, "message": message}
 
     def set_battery_status(self, data, working, message):
-        self.battery_status = {"data": data, "working": working, "message": message}
+        locked = bool(self.battery_status.get("locked_working", False))
+        if working:
+            locked = True
+
+        if locked and not working:
+            message = "Battery interface working (latched)"
+            working = True
+
+        self.battery_status = {
+            "data": data,
+            "working": bool(working),
+            "message": message,
+            "locked_working": locked,
+        }
+
+    def set_pushbutton_status(self, status):
+        self.indicator_status["pushbutton"] = status
+
+    def set_indicator(self, key, value, color=None):
+        if key == "pushbutton":
+            self.indicator_status["pushbutton"] = value
+        elif key == "rgb_led" and color:
+            self.indicator_status["rgb_led"][color] = value
+            rgb = self.indicator_status["rgb_led"]
+            self.indicator_status["rgb_led_status"] = "working" if all(
+                rgb.get(color_name) == "working" for color_name in ["red", "green", "blue"]
+            ) else "error"
 
     def set_dc_out_port(self, port_key, result):
         if port_key in self.dc_out:
@@ -101,6 +141,7 @@ class LogExporter:
             "can-status": self.can_status,
             "eeprom-status": self.eeprom_status,
             "mqtt-status": self.mqtt_status,
+            "indicator-status": self.indicator_status,
             "qc_status": self.qc_status,
             "qc_fail_reasons": self.qc_fail_reasons,
         }
