@@ -8,171 +8,227 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+<div class="app-shell">
 
-    <!-- ========== TITLE BAR ========== -->
-    <header class="title-bar">
-        <div class="brand-capsule">
-            <div class="logo-box"><img src="/static/logo.png" alt="Logo" style="height: 28px;"></div>
-            <h1 class="heading">EMC PDU TESTBENCH <span class="divider">|</span> <small>TEST CONSOLE</small></h1>
+    <!-- ========== TOP BAR ========== -->
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-logo"><img src="/static/logo.png" alt="Logo" style="height: 26px;"></div>
+            <div class="brand-text">
+                <span class="brand-title">EMC PDU TESTBENCH</span>
+                <span class="brand-sub">Test Console</span>
+            </div>
+        </div>
+
+        <div class="status-strip">
+            <div class="status-cell">
+                <span class="status-label">CPU</span>
+                <span class="glow-text" id="stat_cpu">--%</span>
+            </div>
+            <div class="status-cell">
+                <span class="status-label">CAN1</span>
+                <span class="status-box" id="stat_can">--</span>
+            </div>
+            <div class="status-cell">
+                <span class="status-label">Temp</span>
+                <span class="glow-text" id="stat_temp">-- &deg;C</span>
+            </div>
+            <div class="status-cell">
+                <span class="status-label">Hum</span>
+                <span class="glow-text" id="stat_hum">-- %</span>
+            </div>
+            <div class="status-cell">
+                <span class="status-label">EEPROM</span>
+                <span class="status-box" id="stat_eeprom">--</span>
+            </div>
+            <div class="status-cell status-cell-clickable" id="mqtt_pill" onclick="openMQTTConfig()" title="Click to configure MQTT">
+                <span class="status-label">MQTT</span>
+                <span class="status-box" id="stat_mqtt">--</span>
+            </div>
+            <div class="status-cell">
+                <span class="status-label">UTC</span>
+                <span class="glow-text mono" id="stat_time">--:--:--</span>
+            </div>
         </div>
     </header>
 
-    <!-- ========== STATUS BAR ========== -->
-    <div class="status-bar">
-        <div class="stat-pill">CPU <span class="glow-text" id="stat_cpu">--%</span></div>
-        <div class="stat-pill">CAN1 <span class="status-box" id="stat_can">--</span></div>
-        <div class="stat-pill">TEMP <span class="glow-text" id="stat_temp">-- &deg;C</span></div>
-        <div class="stat-pill">HUM <span class="glow-text" id="stat_hum">-- %</span></div>
-        <div class="stat-pill">EEPROM <span class="status-box" id="stat_eeprom">--</span></div>
-        <div class="stat-pill" id="mqtt_pill" onclick="openMQTTConfig()" title="Click to configure MQTT">
-            MQTT <span class="status-box" id="stat_mqtt">--</span>
-        </div>
-        <div class="stat-pill">UTC <span class="glow-text mono" id="stat_time">--:--:--</span></div>
+    <div class="workspace">
+
+        <!-- ========== SIDEBAR NAV ========== -->
+        <nav class="sidebar">
+            <div class="sidebar-label">Test Stages</div>
+            <button class="tab-button nav-item active-tab" onclick="showTab('inspectionTab', this)">
+                <span class="nav-index">01</span><span class="nav-text">Inspection</span>
+            </button>
+            <button class="tab-button nav-item" onclick="showTab('chargerTab', this)">
+                <span class="nav-index">02</span><span class="nav-text">Charger</span>
+            </button>
+            <button class="tab-button nav-item" onclick="showTab('batteryTab', this)">
+                <span class="nav-index">03</span><span class="nav-text">Battery</span>
+            </button>
+            <button class="tab-button nav-item" onclick="showTab('dcOutTab', this)">
+                <span class="nav-index">04</span><span class="nav-text">DC Out</span>
+            </button>
+            <button class="tab-button nav-item" onclick="showTab('indicatorTab', this)">
+                <span class="nav-index">05</span><span class="nav-text">Indicator</span>
+            </button>
+
+            <div class="sidebar-label">Actions</div>
+            <div class="sidebar-actions">
+                <button class="nav-action" onclick="openQCModal()">Report QC</button>
+                <button class="nav-action" onclick="showDeviceInfo()">Board Info</button>
+                <button class="nav-action" onclick="exportLog()">Export Log</button>
+            </div>
+        </nav>
+
+        <!-- ========== MAIN CONTENT ========== -->
+        <main class="content">
+
+            <!-- ---------- 1. INSPECTION TAB ---------- -->
+            <div id="inspectionTab" class="tab active">
+                <div class="content-heading">
+                    <h2>Electrical Inspection</h2>
+                    <p class="content-sub">Confirm the board passes a basic visual and electrical check before functional testing begins.</p>
+                </div>
+                <div class="control-card inspection-card">
+                    <div class="check-item">
+                        <p>1&#65039;&#8419; VISUAL: No physical damage to PCB?</p>
+                        <div class="radio-group">
+                            <label><input type="radio" name="visual" value="yes"> PASS</label>
+                            <label><input type="radio" name="visual" value="no"> FAIL</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <p>2&#65039;&#8419; ELECTRICAL: Basic voltage checks passed?</p>
+                        <div class="radio-group">
+                            <label><input type="radio" name="electrical" value="yes"> PASS</label>
+                            <label><input type="radio" name="electrical" value="no"> FAIL</label>
+                        </div>
+                    </div>
+                    <button class="dashboard-button btn-green" onclick="saveInspection()">Commit Inspection</button>
+                    <p id="inspectionSavedMsg" class="saved-msg"></p>
+                </div>
+            </div>
+
+            <!-- ---------- 2. CHARGER TAB ---------- -->
+            <div id="chargerTab" class="tab">
+                <div class="content-heading">
+                    <h2>Charger</h2>
+                    <p class="content-sub">Live telemetry and interface health for the NPB-1200 charger.</p>
+                </div>
+                <div class="grid-layout">
+                    <div class="control-card">
+                        <h3>Charger Telemetry (NPB-1200)</h3>
+                        <div class="data-row">VOUT <span class="status-box" id="charger_vout">--</span></div>
+                        <div class="data-row">IOUT <span class="status-box" id="charger_iout">--</span></div>
+                        <div class="data-row">TEMP <span class="status-box" id="charger_temp">--</span></div>
+                    </div>
+                    <div class="control-card">
+                        <h3>Interface Status</h3>
+                        <div class="data-row">STATE <span class="status-box" id="charger_state">--</span></div>
+                        <div class="data-row-full" id="charger_message">Waiting for first read...</div>
+                        <button class="dashboard-button btn-blue" onclick="testCharger()">Test Charger</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- 3. BATTERY TAB ---------- -->
+            <div id="batteryTab" class="tab">
+                <div class="content-heading">
+                    <h2>Battery</h2>
+                    <p class="content-sub">Basic and advanced battery telemetry, plus interface health.</p>
+                </div>
+                <div class="grid-layout">
+                    <div class="control-card">
+                        <h3>Batt_Basic</h3>
+                        <div class="data-row">VOLTAGE <span class="status-box" id="batt_voltage">--</span></div>
+                        <div class="data-row">CURRENT <span class="status-box" id="batt_current">--</span></div>
+                        <div class="data-row">SOC <span class="status-box" id="batt_soc">--</span></div>
+                        <div class="data-row">BATTERY STATE <span class="status-box" id="batt_state">--</span></div>
+                        <div class="data-row">CHARGER <span class="status-box" id="batt_charger_conn">--</span></div>
+                        <div class="data-row">TEMP MAX/MIN <span class="status-box" id="batt_temp_max">--</span> / <span class="status-box" id="batt_temp_min">--</span></div>
+                    </div>
+                    <div class="control-card">
+                        <h3>Batt_Advance (Health)</h3>
+                        <div class="data-row-full mono small" id="batt_health">NA</div>
+                    </div>
+                    <div class="control-card full-width">
+                        <h3>Interface Status</h3>
+                        <div class="data-row">STATUS <span class="status-box" id="battery_state_badge">--</span></div>
+                        <div class="data-row-full" id="battery_message">Waiting for first read...</div>
+                        <button class="dashboard-button btn-blue" onclick="testBattery()">Test Battery</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- 4. DC OUT TAB ---------- -->
+            <div id="dcOutTab" class="tab">
+                <div class="content-heading">
+                    <h2>DC Out</h2>
+                    <p class="content-sub">Verify each DC output port and confirm battery backup behaviour.</p>
+                </div>
+                <div class="control-card inspection-card">
+                    <h3>DC Output - Port Checks</h3>
+                    <div class="check-item">
+                        <p>DC OUT PORT 1: Power present &amp; within spec?</p>
+                        <div class="radio-group">
+                            <label><input type="radio" name="port1" value="pass"> PASS</label>
+                            <label><input type="radio" name="port1" value="fail"> FAIL</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <p>DC OUT PORT 2: Power present &amp; within spec?</p>
+                        <div class="radio-group">
+                            <label><input type="radio" name="port2" value="pass"> PASS</label>
+                            <label><input type="radio" name="port2" value="fail"> FAIL</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <p>DC OUT PORT 3: Power present &amp; within spec?</p>
+                        <div class="radio-group">
+                            <label><input type="radio" name="port3" value="pass"> PASS</label>
+                            <label><input type="radio" name="port3" value="fail"> FAIL</label>
+                        </div>
+                    </div>
+                    <button class="dashboard-button btn-green" onclick="saveDcOutPorts()">Commit DC Out Results</button>
+                    <p id="dcOutSavedMsg" class="saved-msg"></p>
+                </div>
+
+                <div class="control-card inspection-card">
+                    <h3>Battery Backup Check</h3>
+                    <p>Turn off the charger output / remove AC input, then confirm below. The battery must
+                       report <strong>Discharging</strong> with charger <strong>Disconnected</strong> to pass.</p>
+                    <div class="btn-group">
+                        <button class="dashboard-button btn-green" onclick="confirmBackupTest(true)">Yes - AC/Charger is Off</button>
+                        <button class="dashboard-cancel-button" onclick="confirmBackupTest(false)">No - Not Yet</button>
+                    </div>
+                    <div class="data-row-full" id="backupTestResult">Not started.</div>
+                </div>
+            </div>
+
+            <!-- ---------- 5. INDICATOR TAB ---------- -->
+            <div id="indicatorTab" class="tab">
+                <div class="content-heading">
+                    <h2>Indicator</h2>
+                    <p class="content-sub">Confirm the pushbutton and RGB indicator respond correctly.</p>
+                </div>
+                <div class="control-card">
+                    <h3>Pushbutton Test</h3>
+                    <p>Press the physical front-panel pushbutton (requires 2 presses to confirm - rules out a stuck/bouncing switch).</p>
+                    <div class="push-indicator" id="pushIndicatorDot"></div>
+                    <div class="data-row-full" id="pushbuttonStatus">Waiting for first press...</div>
+                    <button class="dashboard-button btn-blue" onclick="startIndicatorSequence()">Start RGB Confirmation</button>
+                </div>
+            </div>
+
+        </main>
     </div>
-
-    <!-- ========== NAV BAR ========== -->
-    <nav class="action-bar">
-        <div class="nav-links">
-            <button class="tab-button active-tab" onclick="showTab('inspectionTab', this)">INSPECTION</button>
-            <button class="tab-button" onclick="showTab('chargerTab', this)">CHARGER</button>
-            <button class="tab-button" onclick="showTab('batteryTab', this)">BATTERY</button>
-            <button class="tab-button" onclick="showTab('dcOutTab', this)">DC OUT</button>
-            <button class="tab-button" onclick="showTab('indicatorTab', this)">INDICATOR</button>
-        </div>
-        <div class="master-controls">
-            <button class="dashboard-button btn-blue" onclick="openQCModal()">REPORT QC</button>
-            <button class="dashboard-button btn-blue" onclick="showDeviceInfo()">BOARD INFO</button>
-            <button class="dashboard-button btn-blue" onclick="exportLog()">EXPORT LOG</button>
-        </div>
-    </nav>
-
-    <!-- ========== MAIN BODY ========== -->
-    <main class="container">
-
-        <!-- ---------- 1. INSPECTION TAB ---------- -->
-        <div id="inspectionTab" class="tab active">
-            <div class="control-card inspection-card">
-                <h3>ELECTRICAL INSPECTION</h3>
-                <div class="check-item">
-                    <p>1&#65039;&#8419; VISUAL: No physical damage to PCB?</p>
-                    <div class="radio-group">
-                        <label><input type="radio" name="visual" value="yes"> PASS</label>
-                        <label><input type="radio" name="visual" value="no"> FAIL</label>
-                    </div>
-                </div>
-                <div class="check-item">
-                    <p>2&#65039;&#8419; ELECTRICAL: Basic voltage checks passed?</p>
-                    <div class="radio-group">
-                        <label><input type="radio" name="electrical" value="yes"> PASS</label>
-                        <label><input type="radio" name="electrical" value="no"> FAIL</label>
-                    </div>
-                </div>
-                <button class="dashboard-button btn-green" onclick="saveInspection()">COMMIT INSPECTION</button>
-                <p id="inspectionSavedMsg" class="saved-msg"></p>
-            </div>
-        </div>
-
-        <!-- ---------- 2. CHARGER TAB ---------- -->
-        <div id="chargerTab" class="tab">
-            <div class="grid-layout">
-                <div class="control-card">
-                    <h3>CHARGER TELEMETRY (NPB-1200)</h3>
-                    <div class="data-row">VOUT <span class="status-box" id="charger_vout">--</span></div>
-                    <div class="data-row">IOUT <span class="status-box" id="charger_iout">--</span></div>
-                    <div class="data-row">TEMP <span class="status-box" id="charger_temp">--</span></div>
-                </div>
-                <div class="control-card">
-                    <h3>INTERFACE STATUS</h3>
-                    <div class="data-row">STATE <span class="status-box" id="charger_state">--</span></div>
-                    <div class="data-row-full" id="charger_message">Waiting for first read...</div>
-                    <button class="dashboard-button btn-blue" onclick="testCharger()">TEST CHARGER</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ---------- 3. BATTERY TAB ---------- -->
-        <div id="batteryTab" class="tab">
-            <div class="grid-layout">
-                <div class="control-card">
-                    <h3>BATT_BASIC</h3>
-                    <div class="data-row">VOLTAGE <span class="status-box" id="batt_voltage">--</span></div>
-                    <div class="data-row">CURRENT <span class="status-box" id="batt_current">--</span></div>
-                    <div class="data-row">SOC <span class="status-box" id="batt_soc">--</span></div>
-                    <div class="data-row">BATTERY STATE <span class="status-box" id="batt_state">--</span></div>
-                    <div class="data-row">CHARGER <span class="status-box" id="batt_charger_conn">--</span></div>
-                    <div class="data-row">TEMP MAX/MIN <span class="status-box" id="batt_temp_max">--</span> / <span class="status-box" id="batt_temp_min">--</span></div>
-                </div>
-                <div class="control-card">
-                    <h3>BATT_ADVANCE (HEALTH)</h3>
-                    <div class="data-row-full mono small" id="batt_health">NA</div>
-                </div>
-                <div class="control-card full-width">
-                    <h3>INTERFACE STATUS</h3>
-                    <div class="data-row">STATUS <span class="status-box" id="battery_state_badge">--</span></div>
-                    <div class="data-row-full" id="battery_message">Waiting for first read...</div>
-                    <button class="dashboard-button btn-blue" onclick="testBattery()">TEST BATTERY</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ---------- 4. DC OUT TAB ---------- -->
-        <div id="dcOutTab" class="tab">
-            <div class="control-card inspection-card">
-                <h3>DC OUTPUT - PORT CHECKS</h3>
-                <div class="check-item">
-                    <p>DC OUT PORT 1: Power present &amp; within spec?</p>
-                    <div class="radio-group">
-                        <label><input type="radio" name="port1" value="pass"> PASS</label>
-                        <label><input type="radio" name="port1" value="fail"> FAIL</label>
-                    </div>
-                </div>
-                <div class="check-item">
-                    <p>DC OUT PORT 2: Power present &amp; within spec?</p>
-                    <div class="radio-group">
-                        <label><input type="radio" name="port2" value="pass"> PASS</label>
-                        <label><input type="radio" name="port2" value="fail"> FAIL</label>
-                    </div>
-                </div>
-                <div class="check-item">
-                    <p>DC OUT PORT 3: Power present &amp; within spec?</p>
-                    <div class="radio-group">
-                        <label><input type="radio" name="port3" value="pass"> PASS</label>
-                        <label><input type="radio" name="port3" value="fail"> FAIL</label>
-                    </div>
-                </div>
-                <button class="dashboard-button btn-green" onclick="saveDcOutPorts()">COMMIT DC OUT RESULTS</button>
-                <p id="dcOutSavedMsg" class="saved-msg"></p>
-            </div>
-
-            <div class="control-card inspection-card">
-                <h3>BATTERY BACKUP CHECK</h3>
-                <p>Turn off the charger output / remove AC input, then confirm below. The battery must
-                   report <strong>Discharging</strong> with charger <strong>Disconnected</strong> to pass.</p>
-                <div class="btn-group">
-                    <button class="dashboard-button btn-green" onclick="confirmBackupTest(true)">YES - AC/CHARGER IS OFF</button>
-                    <button class="dashboard-cancel-button" onclick="confirmBackupTest(false)">NO - NOT YET</button>
-                </div>
-                <div class="data-row-full" id="backupTestResult">Not started.</div>
-            </div>
-        </div>
-
-        <!-- ---------- 5. INDICATOR TAB ---------- -->
-        <div id="indicatorTab" class="tab">
-            <div class="control-card">
-                <h3>PUSHBUTTON TEST</h3>
-                <p>Press the physical front-panel pushbutton (requires 2 presses to confirm - rules out a stuck/bouncing switch).</p>
-                <div class="push-indicator" id="pushIndicatorDot"></div>
-                <div class="data-row-full" id="pushbuttonStatus">Waiting for first press...</div>
-                <button class="dashboard-button btn-blue" onclick="startIndicatorSequence()">START RGB CONFIRMATION</button>
-            </div>
-        </div>
-
-    </main>
+</div>
 
     <!-- ========== MQTT CONFIG MODAL ========== -->
     <div id="mqttConfigModal" class="modal">
         <div class="modal-content card">
-            <div class="card-header">MQTT CONFIGURATION</div>
+            <div class="card-header">MQTT Configuration</div>
             <div class="modal-body">
                 <div class="input-row"><label>Hostname</label><input type="text" id="mqtt_hostname"></div>
                 <div class="input-row"><label>Port</label><input type="number" id="mqtt_port"></div>
@@ -180,8 +236,8 @@
                 <div class="input-row"><label>User</label><input type="text" id="mqtt_username"></div>
                 <div class="input-row"><label>Pass</label><input type="password" id="mqtt_password"></div>
                 <div class="modal-footer">
-                    <button class="btn btn-blue" onclick="saveMQTTConfig()">SAVE CHANGES</button>
-                    <button class="btn btn-outline" onclick="closeMQTTConfig()">CANCEL</button>
+                    <button class="btn btn-blue" onclick="saveMQTTConfig()">Save Changes</button>
+                    <button class="btn btn-outline" onclick="closeMQTTConfig()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -190,14 +246,14 @@
     <!-- ========== QC MODAL ========== -->
     <div id="qcModal" class="modal">
         <div class="modal-content card wide-modal">
-            <div class="card-header" id="qcTitle">QC VALIDATION REPORT</div>
+            <div class="card-header" id="qcTitle">QC Validation Report</div>
             <div class="modal-body scrollable">
                 <div id="qcResultsList"></div>
                 <p id="qcResult"></p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-green" onclick="confirmQC()">CONFIRM &amp; WRITE EEPROM</button>
-                <button class="btn btn-outline" onclick="closeQCModal()">CLOSE</button>
+                <button class="btn btn-green" onclick="confirmQC()">Confirm &amp; Write EEPROM</button>
+                <button class="btn btn-outline" onclick="closeQCModal()">Close</button>
             </div>
         </div>
     </div>
@@ -205,10 +261,10 @@
     <!-- ========== DEVICE INFO MODAL ========== -->
     <div id="deviceInfoModal" class="modal">
         <div class="modal-content card wide-modal">
-            <div class="card-header">BOARD EEPROM DATA</div>
+            <div class="card-header">Board EEPROM Data</div>
             <div class="modal-body scrollable" id="deviceInfoData"></div>
             <div class="modal-footer">
-                <button class="btn btn-outline" onclick="closeDeviceInfo()">CLOSE</button>
+                <button class="btn btn-outline" onclick="closeDeviceInfo()">Close</button>
             </div>
         </div>
     </div>

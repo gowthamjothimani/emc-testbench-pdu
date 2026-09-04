@@ -6,15 +6,19 @@
     <title>Login</title>
     <style>
         :root {
-            --bg-dark: #0b0e14;
-            --card-bg: #1c2128;
-            --border: #30363d;
-            --text-main: #adbac7;
-            --text-dim: #768390;
-            --neon-green: #3fb950;
-            --neon-blue: #539bf5;
+            --bg-dark: #0d1117;
+            --bg-inset: #090c10;
+            --card-bg: #161b22;
+            --card-bg-alt: #1c2128;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-dim: #8b949e;
+            --success: #2ea043;
+            --accent-blue: #58a6ff;
             --font-mono: 'JetBrains Mono', 'Courier New', monospace;
         }
+
+        * { box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -22,7 +26,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             color: var(--text-main);
         }
@@ -30,67 +34,79 @@
         .form-container {
             background-color: var(--card-bg);
             padding: 0;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
             width: 100%;
-            max-width: 450px;
+            max-width: 440px;
             overflow: hidden;
         }
 
         .header-logo-section {
-            background-color: #ffffff;
-            padding: 20px;
+            background-color: var(--card-bg-alt);
+            padding: 22px 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-bottom: 4px solid var(--neon-blue);
+            border-bottom: 2px solid var(--accent-blue);
         }
 
         .logo-placeholder {
-            max-width: 100px;
+            max-width: 90px;
             height: auto;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+            background: #ffffff;
+            padding: 6px;
+            border-radius: 4px;
         }
 
         .app-name {
             font-family: var(--font-mono);
-            color: #1c2128;
+            color: var(--text-main);
             font-weight: bold;
             letter-spacing: 2px;
             text-transform: uppercase;
-            font-size: 1.2rem;
-            margin: 0;
+            font-size: 1.05rem;
+            margin: 0 0 4px;
             text-align: center;
         }
 
+        .app-sub {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 1.5px;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            margin: 0;
+        }
+
         .form-content {
-            padding: 30px 40px 40px 40px;
+            padding: 28px 36px 34px;
         }
 
         .input-group {
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
-            font-size: 0.75rem;
+            margin-bottom: 7px;
+            font-size: 0.7rem;
             font-weight: bold;
-            color: #d3d3d3;
+            color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         input[type="text"] {
             width: 100%;
-            padding: 12px 15px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
+            padding: 11px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
             font-size: 14px;
-            background-color: #0d1117;
-            color: var(--neon-green);
+            background-color: var(--bg-inset);
+            color: var(--text-main);
             font-family: var(--font-mono);
             box-sizing: border-box;
             transition: border-color 0.2s;
@@ -98,29 +114,28 @@
 
         input:focus {
             outline: none;
-            border-color: var(--neon-blue);
-            box-shadow: 0 0 8px rgba(83, 155, 245, 0.3);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
         }
 
         button {
             width: 100%;
-            padding: 15px;
-            background-color: var(--neon-green);
-            color: #000;
+            padding: 13px;
+            background-color: var(--success);
+            color: #fff;
             border: none;
-            border-radius: 6px;
-            font-size: 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 2px;
             cursor: pointer;
-            box-shadow: 0 0 15px rgba(63, 185, 80, 0.4);
-            margin-top: 10px;
+            margin-top: 6px;
+            transition: filter 0.15s;
         }
 
         button:hover {
-            filter: brightness(1.1);
-            box-shadow: 0 0 25px rgba(63, 185, 80, 0.6);
+            filter: brightness(1.12);
         }
     </style>
 </head>
@@ -129,7 +144,8 @@
     <div class="form-container">
         <div class="header-logo-section">
             <img src="{{ url_for('static', filename='logo.png') }}" alt="EMC LOGO" class="logo-placeholder">
-            <h2 class="app-name">EMC PDU TEST BENCH</h2>
+            <h2 class="app-name">EMC PDU Test Bench</h2>
+            <p class="app-sub">Operator Login</p>
         </div>
 
         <div class="form-content">

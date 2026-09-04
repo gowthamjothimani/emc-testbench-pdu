@@ -84,5 +84,21 @@ def test_eeprom_status_latches_first_detected_value():
     assert log.get_last_log()["eeprom-status"]["present"] is True
 
 
+def test_battery_advance_is_removed_from_exported_logs():
+    log = LogExporter(DummyMQTT())
+    battery_data = {
+        "pdu_batt": {
+            "batt_basic": {"batt_voltage": "52.10V"},
+            "batt_advance": {"batt_health": {"batt_cycle_life": 42}},
+        }
+    }
+
+    log.set_battery_status(battery_data, True, "Battery interface working")
+    exported = log.get_last_log()
+
+    assert "batt_advance" not in exported["battery-status"]["data"]["pdu_batt"]
+    assert exported["battery-status"]["data"]["pdu_batt"]["batt_basic"]["batt_voltage"] == "52.10V"
+
+
 def test_eeprom_window_is_large_enough_for_full_session_log():
     assert EEPROM_WINDOW_END >= 4096

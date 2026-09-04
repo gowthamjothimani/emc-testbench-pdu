@@ -334,6 +334,7 @@ def write_eeprom_full():
 
         if not full_log:
             full_log = log_exporter.get_last_log()
+        full_log = log_exporter.sanitize_log_data(full_log)
         full_log["qc_status"] = qc_status_val
         if qc_reasons:
             full_log["qc_fail_reasons"] = qc_reasons
