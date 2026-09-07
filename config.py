@@ -20,7 +20,7 @@ PUSHBUTTON_REQUIRED_PRESSES = 2
 MQTT_DEFAULT_CONFIG = {
     "hostname": "10.30.250.241",
     "port": 1883,
-    "topic": "emc_pdu_test",
+    "topic": "emc_test",
     "username": "",
     "password": "",
 }
