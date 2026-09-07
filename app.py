@@ -429,5 +429,5 @@ def handle_qc_status_update(data):
 if __name__ == '__main__':
     mqtt_client.connect_mqtt()
     start_monitoring()
-    print("EMC PDU Testbench starting on :5000")
-    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    print("EMC PDU Testbench starting on :5001")
+    socketio.run(app, host='0.0.0.0', port=5001, allow_unsafe_werkzeug=True)
