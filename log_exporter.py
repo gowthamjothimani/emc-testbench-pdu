@@ -41,6 +41,7 @@ class LogExporter:
 
         self.can_status = {"state": "UNKNOWN", "health": "ERROR", "detail": ""}
         self.eeprom_status = {"present": None}
+        self._eeprom_present_locked = False
         self.mqtt_status = {"connected": False, "reachable": None}
 
         self.qc_status = "NOT_RUN"
@@ -104,7 +105,12 @@ class LogExporter:
         self.can_status = status_dict
 
     def set_eeprom_status(self, present):
-        self.eeprom_status = {"present": present}
+        # Latch "present" the first time it's seen True - probe() can read
+        # back False for a beat while write_eeprom() is actively driving
+        # the bus (WP toggling / mid-write), which isn't a real absence.
+        if present:
+            self._eeprom_present_locked = True
+        self.eeprom_status = {"present": True if self._eeprom_present_locked else bool(present)}
 
     def set_mqtt_status(self, connected, reachable):
         self.mqtt_status = {"connected": connected, "reachable": reachable}
@@ -112,6 +118,13 @@ class LogExporter:
     def set_qc_status(self, status, reasons=None):
         self.qc_status = status
         self.qc_fail_reasons = reasons or []
+
+    @staticmethod
+    def _status_word(entry):
+        working = entry.get("working") if isinstance(entry, dict) else None
+        if working is None:
+            return "not tested"
+        return "working" if working else "error"
 
     @staticmethod
     def sanitize_log_data(data):
@@ -137,8 +150,8 @@ class LogExporter:
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             },
             "inspection-status": self.inspection,
-            "charger-status": self.charger_status,
-            "battery-status": self.battery_status,
+            "charger-status": self._status_word(self.charger_status),
+            "battery-status": self._status_word(self.battery_status),
             "dc-output-status": self.dc_out,
             "battery-backup-status": self.backup_test,
             "can-status": self.can_status,

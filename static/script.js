@@ -376,14 +376,14 @@ function openQCModal() {
         items.push({ label: `Visual Inspection: ${insp.visual}`, ok: insp.visual === 'yes' });
         items.push({ label: `Electrical Inspection: ${insp.electrical}`, ok: insp.electrical === 'yes' });
 
-        const ch = logData['charger-status'] || {};
-        items.push({ label: `Charger Interface: ${ch.message}`, ok: ch.working === true });
+        const chargerStatus = logData['charger-status'] || 'not tested';
+        items.push({ label: `Charger Interface: ${chargerStatus}`, ok: chargerStatus === 'working' });
 
         // Battery QC uses the session-latched verdict, not the instantaneous one -
         // so the deliberate charger-disconnect during the backup test doesn't
         // retroactively fail a battery interface that already proved itself.
-        const batt = logData['battery-status'] || {};
-        items.push({ label: `Battery Interface: ${batt.message}`, ok: batt.locked_working === true });
+        const batteryStatus = logData['battery-status'] || 'not tested';
+        items.push({ label: `Battery Interface: ${batteryStatus}`, ok: batteryStatus === 'working' });
 
         const dcOut = logData['dc-output-status'] || {};
         for (const [k, v] of Object.entries(dcOut)) {

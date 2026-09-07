@@ -3,9 +3,9 @@ import time
 
 _MODE1  = 0x00
 _MODE2  = 0x01
-_PWM0   = 0x04  # RED
-_PWM1   = 0x05  # GREEN
-_PWM2   = 0x03  # BLUE
+_PWM0   = 0x03  # RED
+_PWM1   = 0x04  # GREEN
+_PWM2   = 0x05  # BLUE
 _PWM3   = 0x06  # WHITE (if present)
 _LEDOUT = 0x08
 
