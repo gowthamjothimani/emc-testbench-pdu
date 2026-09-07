@@ -93,6 +93,37 @@ function exportLog() {
     alert('Log export sent to MQTT broker.');
 }
 
+// ========== REMOTE SHUTDOWN ==========
+// Deliberately cuts power to the whole unit (BBB included) via the MAX7320.
+// Irreversible from here on - needs a physical power cycle afterward.
+function triggerRemoteShutdown() {
+    const warned = confirm(
+        'This will remotely power off the ENTIRE unit, including the BBB, ' +
+        'after a 5 second red-LED warning blink.\n\n' +
+        'This cannot be undone remotely - the board will need to be ' +
+        'physically power-cycled afterward.\n\n' +
+        'Continue?'
+    );
+    if (!warned) return;
+
+    fetch('/board/remote_shutdown', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'started') {
+                alert(data.message);
+            } else {
+                alert('Could not start remote shutdown: ' + (data.message || 'unknown error'));
+            }
+        })
+        .catch(err => alert('Error triggering remote shutdown: ' + err.message));
+}
+
+socket.on('remote_shutdown_status', function (data) {
+    if (data.phase === 'failed') {
+        alert('Remote shutdown failed: ' + (data.message || 'unknown error'));
+    }
+});
+
 // ========== INSPECTION TAB ==========
 function saveInspection() {
     const visual = document.querySelector('input[name="visual"]:checked');

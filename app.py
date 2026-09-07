@@ -16,6 +16,7 @@ from battery_interface import BatteryInterface
 from backup_logic import poll_for_discharge
 from indicator import PushbuttonMonitor
 from pca9632 import PCA9632
+from emc_board import EMC_Board
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -28,6 +29,7 @@ charger = ChargerInterface()
 battery = BatteryInterface()
 pushbutton = PushbuttonMonitor()
 rgb_led = PCA9632()
+board = EMC_Board()
 
 tester_info_submitted = False
 testername = pcbserial = modelnumber = projectdetail = None
@@ -35,6 +37,10 @@ testername = pcbserial = modelnumber = projectdetail = None
 _status_thread_started = False
 _backup_test_lock = threading.Lock()
 _backup_test_running = False
+
+_shutdown_lock = threading.Lock()
+_shutdown_in_progress = False
+REMOTE_SHUTDOWN_WARNING_S = 5.0
 
 
 # ========== EEPROM HELPERS ==========
@@ -148,6 +154,44 @@ def rgb_result(data):
     status = (data or {}).get('status')
     if color and status:
         log_exporter.set_indicator('rgb_led', status, color)
+
+
+def _run_remote_shutdown_sequence():
+    """
+    Runs in a background thread: blinks the front-panel RGB LED red for
+    REMOTE_SHUTDOWN_WARNING_S seconds as a last-chance visual warning,
+    then deliberately triggers the MAX7320 remote-shutdown command. After
+    that command lands, the whole unit (BBB included) loses power - there
+    is no response left to send back to the client.
+    """
+    global _shutdown_in_progress
+    try:
+        socketio.emit('remote_shutdown_status', {
+            "phase": "warning",
+            "seconds": REMOTE_SHUTDOWN_WARNING_S,
+        })
+
+        deadline = time.time() + REMOTE_SHUTDOWN_WARNING_S
+        led_on = True
+        while time.time() < deadline:
+            if rgb_led.available:
+                rgb_led.red() if led_on else rgb_led.off()
+            led_on = not led_on
+            time.sleep(0.5)
+
+        if rgb_led.available:
+            rgb_led.red()
+
+        socketio.emit('remote_shutdown_status', {"phase": "shutting_down"})
+        ok = board.trigger_remote_shutdown()
+        if not ok:
+            socketio.emit('remote_shutdown_status', {
+                "phase": "failed",
+                "message": board.last_error or "Remote shutdown command failed.",
+            })
+    finally:
+        with _shutdown_lock:
+            _shutdown_in_progress = False
 
 
 def start_monitoring():
@@ -397,6 +441,30 @@ def device_info():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+
+
+# ========== BOARD: REMOTE SHUTDOWN ==========
+@app.route('/board/remote_shutdown', methods=['POST'])
+def board_remote_shutdown():
+    """
+    Deliberately triggers the MAX7320 remote-shutdown command (0x80) after
+    a REMOTE_SHUTDOWN_WARNING_S-second red-LED warning blink. Irreversible
+    from the software side - the unit needs a physical power cycle
+    afterward. See emc_board.EMC_Board.trigger_remote_shutdown().
+    """
+    global _shutdown_in_progress
+    with _shutdown_lock:
+        if _shutdown_in_progress:
+            return jsonify({"status": "error", "message": "Remote shutdown already in progress."}), 409
+        _shutdown_in_progress = True
+
+    threading.Thread(target=_run_remote_shutdown_sequence, daemon=True).start()
+    return jsonify({
+        "status": "started",
+        "warning_seconds": REMOTE_SHUTDOWN_WARNING_S,
+        "message": f"Remote shutdown triggered - the unit will lose power in "
+                   f"{int(REMOTE_SHUTDOWN_WARNING_S)} seconds.",
+    })
 
 
 # ========== MQTT CONFIG / EXPORT ==========

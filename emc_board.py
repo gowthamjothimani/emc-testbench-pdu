@@ -60,6 +60,37 @@ class EMC_Board:
             print(f"Unexpected Error: {e}")
             return False
 
+    def trigger_remote_shutdown(self):
+        """
+        Deliberately sends 0b10000000 (0x80) to the MAX7320 - the command
+        that remotely cuts power to the whole unit, BBB included. This
+        bypasses write_max7320_zero()'s accidental-0x80 guard on purpose.
+
+        Only call this from an explicit, operator-confirmed "Remote
+        Shutdown" action (with its own warning/countdown) - never from
+        generic bit-setting code, which should keep going through
+        write_max7320_zero()/_turn_on_bit()/_turn_off_bit() so the guard
+        stays effective against an accidental 0x80.
+        """
+        if not self.hardware_available:
+            self.last_error = "Hardware interface unavailable"
+            return False
+
+        try:
+            with self._smbus_cls(self.I2C_BUS) as bus:
+                bus.write_byte(self.SLAVE_ADDR, 0b10000000)
+            self.last_error = None
+            print("Remote shutdown command (0x80) sent to MAX7320.")
+            return True
+        except OSError as e:
+            self.last_error = str(e)
+            print(f"IC Error: {e}")
+            return False
+        except Exception as e:
+            self.last_error = str(e)
+            print(f"Unexpected Error: {e}")
+            return False
+
     def _turn_on_bit(self, bit_position):
         if 0 <= bit_position <= 7:
             self.bits |= (1 << bit_position)

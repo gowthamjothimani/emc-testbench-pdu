@@ -220,6 +220,17 @@ body {
     color: var(--accent-blue);
 }
 
+.nav-action-danger {
+    color: #ff7b72;
+    border-color: var(--danger);
+}
+
+.nav-action-danger:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+
 /* ========== CONTENT AREA ========== */
 .content {
     flex: 1;
