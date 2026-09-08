@@ -1,0 +1,56 @@
+{
+  "test_details": {
+    "testername": "Gowtham",
+    "pcbserial": "PDU010826024",
+    "modelnumber": "PDU-G6.0.0",
+    "projectdetail": "HR26007"
+  },
+  "system-check": {
+    "cpu-usage": 8.1,
+    "temperature": 33.3,
+    "humidity": 34.2,
+    "timestamp": "2026-09-07 13:20:58"
+  },
+  "inspection-status": {
+    "visual": "yes",
+    "electrical": "yes"
+  },
+  "charger-status":"working",
+  "battery-status": "working",
+  "dc-output-status": {
+    "port1": "pass",
+    "port2": "pass",
+    "port3": "pass"
+  },
+  "battery-backup-status": {
+    "requested": true,
+    "confirmed_off_by_operator": true,
+    "result": "pass",
+    "observed_battery_state": "Ready",
+    "observed_charger_connected": "disconnected"
+  },
+  "can-status": {
+    "state": "UP",
+    "health": "OK"
+  },
+  "eeprom-status": {
+    "present": true
+  },
+  "mqtt-status": {
+    "connected": true,
+    "reachable": true
+  },
+  "indicator-status": {
+    "pushbutton": "working",
+    "rgb_led": {
+      "red": "working",
+      "green": "working",
+      "blue": "working"
+    },
+    "rgb_led_status": "working"
+  },
+  "qc_status": "PASSED",
+  "qc_fail_reasons": []
+}
+
+

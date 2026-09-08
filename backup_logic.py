@@ -20,10 +20,6 @@ def poll_for_discharge(battery_interface, timeout_s: float = 20.0, interval_s: f
     start = time.monotonic()
     observed_state = None
     observed_charger = None
-    # Once the charger reports "disconnected" during this poll, latch it -
-    # CAN/relay noise can flicker it back to "connected" for a beat while
-    # the backup test is actually running, which shouldn't undo a real
-    # disconnect that already happened.
     charger_disconnected_locked = False
 
     while (time.monotonic() - start) < timeout_s:

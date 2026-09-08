@@ -31,7 +31,7 @@ class BatteryInterface:
         self._listener_started = False
 
         if not self.available:
-            print(f"BatteryInterface: Battery driver package not importable ({_IMPORT_ERROR}). "
+            print(f"BatteryInterface: Battery driver package not importable). "
                   f"Battery tab will report NA until Battery/qhb.py etc. are in place.")
             self._battery = None
             return
