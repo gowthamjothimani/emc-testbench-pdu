@@ -1,7 +1,14 @@
+
 import smbus2
 import time
+
 from config import I2C_BUS, EEPROM_ADDR, EEPROM_WP_GPIO
-import Adafruit_BBIO.GPIO as GPIO
+
+try:
+    import Adafruit_BBIO.GPIO as GPIO
+except ImportError:
+    GPIO = None  # allows import on a non-BeagleBone dev machine
+
 
 class EEPROM:
     def __init__(self):
@@ -19,6 +26,11 @@ class EEPROM:
         GPIO.output(self.wp_gpio, GPIO.LOW if enable_write else GPIO.HIGH)
 
     def probe(self):
+        """
+        Non-destructive presence check for the status bar.
+        Attempts a zero-length address-only write; an ACK means a device
+        is present at EEPROM_ADDR on I2C_BUS. Returns True/False.
+        """
         try:
             msg = smbus2.i2c_msg.write(self.eeprom_addr, [0x00, 0x00])
             self.bus.i2c_rdwr(msg)
